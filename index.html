@@ -50,7 +50,7 @@
         import { 
             LayoutDashboard, Users, Package, Settings, Plus, Save, Search, 
             Trash2, Edit2, CheckCircle, AlertCircle, Menu, X, BookOpen, 
-            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus
+            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle
         } from 'lucide-react';
 
         // --- Komponen UI Reusable ---
@@ -126,7 +126,7 @@
             // State untuk Tab Kepemilikan (missing | filled)
             const [ownershipTab, setOwnershipTab] = useState('missing');
 
-            // State Modal & Edit (Deklarasi di sini sudah cukup)
+            // State Modal & Edit
             const [showSantriModal, setShowSantriModal] = useState(false);
             const [showBarangModal, setShowBarangModal] = useState(false);
             const [editBarangData, setEditBarangData] = useState(null);
@@ -213,7 +213,6 @@
                     // Update local state (Optimistic UI)
                     if(type === 'santri') setSantriData([...santriData, data]);
                     if(type === 'barang') {
-                        // Jika edit, hapus data lama dari state (di sheet tetap append)
                         const filtered = barangData.filter(b => b.niup !== data.niup);
                         setBarangData([...filtered, data]);
                     }
@@ -472,12 +471,53 @@
 
             const TableView = ({ title, columns, data, onAdd, extraHeader }) => {
                 const [searchTerm, setSearchTerm] = useState('');
+                // State untuk filter
+                const [showFilters, setShowFilters] = useState(false);
+                const [activeFilters, setActiveFilters] = useState({
+                    kamar: '',
+                    daerah: '',
+                    wilayah: '',
+                    pendidikan: '',
+                    jurusan: '',
+                    kelas: '',
+                    jenjang: '',
+                    majelisPagi: '',
+                    majelisSore: ''
+                });
+
+                // Helper untuk mendapatkan opsi unik dari data
+                const getUniqueOptions = (key) => {
+                    const values = data.map(item => item[key]).filter(val => val !== undefined && val !== '');
+                    return [...new Set(values)].sort();
+                };
+
+                const handleFilterChange = (key, value) => {
+                    setActiveFilters(prev => ({ ...prev, [key]: value }));
+                };
                 
-                const filteredData = data.filter(item => 
-                    Object.values(item).some(val => 
+                const clearFilters = () => {
+                    setActiveFilters({
+                        kamar: '', daerah: '', wilayah: '', pendidikan: '',
+                        jurusan: '', kelas: '', jenjang: '', majelisPagi: '', majelisSore: ''
+                    });
+                };
+
+                const filteredData = data.filter(item => {
+                    // 1. Cek Search
+                    const matchesSearch = Object.values(item).some(val => 
                         String(val).toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-                );
+                    );
+                    
+                    // 2. Cek Filters (Hanya jika value filter tidak kosong)
+                    const matchesFilters = Object.entries(activeFilters).every(([key, value]) => {
+                        if (!value) return true; // Skip jika filter kosong
+                        // Pastikan property ada pada item, jika tidak ada (misal di data barang tidak ada majelis), kita skip atau anggap false.
+                        // Disini kita gunakan String comparison yang aman.
+                        return String(item[key]) === String(value);
+                    });
+
+                    return matchesSearch && matchesFilters;
+                });
 
                 return (
                     <div className="space-y-6 animate-fade-in">
@@ -496,9 +536,35 @@
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                     />
                                 </div>
+                                <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
+                                    <Filter className="w-5 h-5"/> Filter
+                                </Button>
                                 {onAdd && <Button onClick={onAdd}><Plus className="w-5 h-5"/> Tambah</Button>}
                             </div>
                         </div>
+
+                        {/* Filter Section */}
+                        {showFilters && (
+                            <Card className="p-4 bg-slate-50 border-emerald-100 animate-fade-in">
+                                <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
+                                    <h4 className="font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4" /> Filter Data</h4>
+                                    <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                                        <XCircle className="w-3 h-3" /> Reset Filter
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                    <Select label="Kamar" value={activeFilters.kamar} onChange={(e) => handleFilterChange('kamar', e.target.value)} options={getUniqueOptions('kamar')} />
+                                    <Select label="Daerah" value={activeFilters.daerah} onChange={(e) => handleFilterChange('daerah', e.target.value)} options={getUniqueOptions('daerah')} />
+                                    <Select label="Wilayah" value={activeFilters.wilayah} onChange={(e) => handleFilterChange('wilayah', e.target.value)} options={getUniqueOptions('wilayah')} />
+                                    <Select label="Pendidikan" value={activeFilters.pendidikan} onChange={(e) => handleFilterChange('pendidikan', e.target.value)} options={getUniqueOptions('pendidikan')} />
+                                    <Select label="Jurusan" value={activeFilters.jurusan} onChange={(e) => handleFilterChange('jurusan', e.target.value)} options={getUniqueOptions('jurusan')} />
+                                    <Select label="Kelas" value={activeFilters.kelas} onChange={(e) => handleFilterChange('kelas', e.target.value)} options={getUniqueOptions('kelas')} />
+                                    <Select label="Jenjang" value={activeFilters.jenjang} onChange={(e) => handleFilterChange('jenjang', e.target.value)} options={getUniqueOptions('jenjang')} />
+                                    <Select label="Majelis Pagi" value={activeFilters.majelisPagi} onChange={(e) => handleFilterChange('majelisPagi', e.target.value)} options={getUniqueOptions('majelisPagi')} />
+                                    <Select label="Majelis Sore" value={activeFilters.majelisSore} onChange={(e) => handleFilterChange('majelisSore', e.target.value)} options={getUniqueOptions('majelisSore')} />
+                                </div>
+                            </Card>
+                        )}
 
                         {extraHeader}
 
@@ -525,7 +591,7 @@
                                         {filteredData.length === 0 && (
                                             <tr>
                                                 <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-400">
-                                                    Tidak ada data ditemukan
+                                                    Tidak ada data ditemukan sesuai filter.
                                                 </td>
                                             </tr>
                                         )}
@@ -542,14 +608,11 @@
 
             // --- Logic Tampilan Kepemilikan (Barang) ---
             const renderOwnershipView = () => {
-                // Logic: Pisahkan Santri yang sudah ada di data Barang dan yang belum
-                // Menggunakan Set untuk lookup cepat
                 const filledNiups = new Set(barangData.map(b => String(b.niup)));
                 
                 const missingData = santriData.filter(s => !filledNiups.has(String(s.niup)));
-                const filledData = barangData; // Data barang adalah data yang sudah diisi
+                const filledData = barangData; 
 
-                // Helper buka form dengan data pre-filled
                 const openForm = (data, mode) => {
                     setEditBarangData(data);
                     setShowBarangModal(true);
@@ -559,7 +622,7 @@
                     <TableView 
                         title="Data Kepemilikan"
                         data={ownershipTab === 'missing' ? missingData : filledData}
-                        onAdd={null} // Hilangkan tombol tambah manual, pakai aksi row
+                        onAdd={null} 
                         extraHeader={
                             <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl w-fit">
                                 <button 
@@ -690,8 +753,6 @@
             )
 
             // --- Main Layout Render ---
-
-            // Deleted duplicate declarations here
 
             return (
                 <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
