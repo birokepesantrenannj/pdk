@@ -144,13 +144,16 @@
                         <h4 className="font-bold text-slate-800 text-sm">{title}</h4>
                     </div>
                     
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center flex-1 justify-center">
                         {/* Diagram Lingkaran (Donut) */}
-                        <div className="relative w-32 h-32 rounded-full mb-4 shadow-inner transition-all duration-500" 
+                        <div className="relative w-32 h-32 rounded-full mb-6 shadow-inner transition-all duration-500" 
                              style={{ background: gradientStyle }}>
                              {/* Lubang tengah */}
                              <div className="absolute inset-8 bg-white rounded-full flex items-center justify-center shadow-sm">
-                                <span className="text-xs font-bold text-slate-400">Total: {totalCount}</span>
+                                <div className="text-center">
+                                    <span className="text-xs font-semibold text-slate-400 block">Total</span>
+                                    <span className="text-lg font-bold text-slate-700">{totalCount}</span>
+                                </div>
                              </div>
                         </div>
 
@@ -159,10 +162,10 @@
                             {stats.map((stat, idx) => (
                                 <div key={idx} className="flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-3 h-3 rounded-full ${stat.color}`}></div>
+                                        <div className={`w-2.5 h-2.5 rounded-full ${stat.color}`}></div>
                                         <span className="text-slate-600 font-medium truncate max-w-[100px]" title={stat.label}>{stat.label}</span>
                                     </div>
-                                    <span className="text-slate-500 font-mono">{stat.count} ({stat.percentage}%)</span>
+                                    <span className="text-slate-500 font-mono bg-slate-50 px-1.5 py-0.5 rounded">{stat.count} ({stat.percentage}%)</span>
                                 </div>
                             ))}
                         </div>
@@ -291,7 +294,7 @@
 
             // --- Logic Analisis Statistik (Dashboard) ---
             const getChartColor = (label) => {
-                const l = label.toLowerCase();
+                const l = label ? label.toLowerCase() : '';
                 if (['ya', 'baik', 'lengkap', 'rapi', 'ada', 'berurutan'].includes(l)) return 'bg-emerald-500';
                 if (['cukup'].includes(l)) return 'bg-amber-400';
                 if (['tidak', 'rusak', 'kurang'].includes(l)) return 'bg-rose-500';
@@ -313,19 +316,19 @@
                 });
             };
 
-            // Definisi 11 Aspek untuk Diagram
+            // Definisi 11 Aspek untuk Diagram (Key diupdate sesuai App Script baru)
             const analysisAspects = [
-                { key: 'kepemilikan', label: 'Kepemilikan Kitab', options: ['Ya', 'Tidak'] },
-                { key: 'kelengkapan', label: 'Kelengkapan Kitab', options: ['Ya', 'Tidak'] },
-                { key: 'kondisi', label: 'Kondisi Fisik', options: ['Baik', 'Cukup', 'Rusak'] },
-                { key: 'makna', label: 'Kelengkapan Makna', options: ['Lengkap', 'Cukup', 'Tidak'] },
-                { key: 'ketepatan', label: 'Ketepatan Makna', options: ['Baik', 'Cukup', 'Kurang'] },
-                { key: 'kerapianMakna', label: 'Kerapian Makna', options: ['Rapi', 'Cukup', 'Tidak'] },
-                { key: 'catatan', label: 'Keberadaan Catatan', options: ['Ada', 'Tidak'] },
-                { key: 'kualitasCatatan', label: 'Kualitas Catatan', options: ['Baik', 'Cukup', 'Kurang'] },
-                { key: 'kerapianCatatan', label: 'Kerapian Catatan', options: ['Rapi', 'Cukup', 'Tidak'] },
-                { key: 'keberlanjutan', label: 'Keberlanjutan', options: ['Berurutan', 'Tidak'] },
-                { key: 'kesimpulan', label: 'Kesimpulan Akhir', options: ['Baik', 'Cukup', 'Kurang'] },
+                { key: 'kepemilikan-kitab', label: 'Kepemilikan Kitab', options: ['Ya', 'Tidak'] },
+                { key: 'kelengkapan-kitab', label: 'Kelengkapan Kitab', options: ['Ya', 'Tidak'] },
+                { key: 'kondisi-kitab', label: 'Kondisi Fisik', options: ['Baik', 'Cukup', 'Rusak'] },
+                { key: 'makna-kitab', label: 'Kelengkapan Makna', options: ['Lengkap', 'Cukup', 'Tidak'] },
+                { key: 'ketepatan-makna', label: 'Ketepatan Makna', options: ['Baik', 'Cukup', 'Kurang'] },
+                { key: 'kerapian-makna', label: 'Kerapian Makna', options: ['Rapi', 'Cukup', 'Tidak'] },
+                { key: 'catatan-kitab', label: 'Keberadaan Catatan', options: ['Ada', 'Tidak'] },
+                { key: 'kualitas-catatan', label: 'Kualitas Catatan', options: ['Baik', 'Cukup', 'Kurang'] },
+                { key: 'kerapian-catatan', label: 'Kerapian Catatan', options: ['Rapi', 'Cukup', 'Tidak'] },
+                { key: 'keberlanjutan-catatan', label: 'Keberlanjutan', options: ['Berurutan', 'Tidak'] },
+                { key: 'kesimpulan-akhir', label: 'Kesimpulan Akhir', options: ['Baik', 'Cukup', 'Kurang'] },
             ];
 
             // --- Views ---
@@ -428,10 +431,11 @@
             };
 
             const SantriForm = ({ onClose }) => {
+                // UPDATE: Menggunakan key kebab-case
                 const [formData, setFormData] = useState({
-                    niup: '', nama: '', kamar: '', daerah: '', wilayah: '', 
-                    pendidikan: '', jurusan: '', kelas: '', jenjang: '', 
-                    majelisPagi: '', majelisSore: '', majelisKamisPagi: '', majelisKamisSore: ''
+                    'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '', 
+                    'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
+                    'majelis-pagi': '', 'majelis-sore': '', 'majelis-kamis-pagi': '', 'majelis-kamis-sore': ''
                 });
 
                 const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
@@ -463,10 +467,10 @@
                             <div className="col-span-full border-t border-slate-100 pt-4 mt-2">
                                 <h4 className="text-sm font-bold text-emerald-600 mb-4 uppercase tracking-wide">Data Majelis</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <Input name="majelisPagi" label="Majelis Pagi" onChange={handleChange} />
-                                    <Input name="majelisSore" label="Majelis Sore" onChange={handleChange} />
-                                    <Input name="majelisKamisPagi" label="Majelis Kamis Pagi" onChange={handleChange} />
-                                    <Input name="majelisKamisSore" label="Majelis Kamis Sore" onChange={handleChange} />
+                                    <Input name="majelis-pagi" label="Majelis Pagi" onChange={handleChange} />
+                                    <Input name="majelis-sore" label="Majelis Sore" onChange={handleChange} />
+                                    <Input name="majelis-kamis-pagi" label="Majelis Kamis Pagi" onChange={handleChange} />
+                                    <Input name="majelis-kamis-sore" label="Majelis Kamis Sore" onChange={handleChange} />
                                 </div>
                             </div>
 
@@ -481,12 +485,13 @@
             };
 
             const BarangForm = ({ onClose, initialData = null }) => {
+                // UPDATE: Menggunakan key kebab-case
                 const defaultData = {
-                    niup: '', nama: '', kamar: '', daerah: '', wilayah: '',
-                    kepemilikan: 'Tidak', kelengkapan: 'Tidak', kondisi: 'Rusak', 
-                    makna: 'Tidak', ketepatan: 'Kurang', kerapianMakna: 'Tidak',
-                    catatan: 'Tidak', kualitasCatatan: 'Kurang', kerapianCatatan: 'Tidak',
-                    keberlanjutan: 'Tidak', kesimpulan: 'Kurang', rekapitulasi: 0
+                    'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '',
+                    'kepemilikan-kitab': 'Tidak', 'kelengkapan-kitab': 'Tidak', 'kondisi-kitab': 'Rusak', 
+                    'makna-kitab': 'Tidak', 'ketepatan-makna': 'Kurang', 'kerapian-makna': 'Tidak',
+                    'catatan-kitab': 'Tidak', 'kualitas-catatan': 'Kurang', 'kerapian-catatan': 'Tidak',
+                    'keberlanjutan-catatan': 'Tidak', 'kesimpulan-akhir': 'Kurang', 'rekapitulasi': 0
                 };
 
                 const [formData, setFormData] = useState(defaultData);
@@ -500,20 +505,25 @@
 
                 useEffect(() => {
                     let score = 0;
-                    if (formData.kepemilikan === 'Ya') score += 10;
-                    if (formData.kelengkapan === 'Ya') score += 10;
-                    if (formData.kondisi === 'Baik') score += 10; else if (formData.kondisi === 'Cukup') score += 5;
-                    if (formData.makna === 'Lengkap') score += 10; else if (formData.makna === 'Cukup') score += 5;
-                    if (formData.ketepatan === 'Baik') score += 10; else if (formData.ketepatan === 'Cukup') score += 5;
-                    if (formData.kerapianMakna === 'Rapi') score += 10; else if (formData.kerapianMakna === 'Cukup') score += 5;
-                    if (formData.catatan === 'Ada') score += 10;
-                    if (formData.kualitasCatatan === 'Baik') score += 10; else if (formData.kualitasCatatan === 'Cukup') score += 5;
-                    if (formData.kerapianCatatan === 'Rapi') score += 5; else if (formData.kerapianCatatan === 'Cukup') score += 2.5;
-                    if (formData.keberlanjutan === 'Berurutan') score += 5;
-                    if (formData.kesimpulan === 'Baik') score += 10; else if (formData.kesimpulan === 'Cukup') score += 5;
+                    if (formData['kepemilikan-kitab'] === 'Ya') score += 10;
+                    if (formData['kelengkapan-kitab'] === 'Ya') score += 10;
+                    if (formData['kondisi-kitab'] === 'Baik') score += 10; else if (formData['kondisi-kitab'] === 'Cukup') score += 5;
+                    if (formData['makna-kitab'] === 'Lengkap') score += 10; else if (formData['makna-kitab'] === 'Cukup') score += 5;
+                    if (formData['ketepatan-makna'] === 'Baik') score += 10; else if (formData['ketepatan-makna'] === 'Cukup') score += 5;
+                    if (formData['kerapian-makna'] === 'Rapi') score += 10; else if (formData['kerapian-makna'] === 'Cukup') score += 5;
+                    if (formData['catatan-kitab'] === 'Ada') score += 10;
+                    if (formData['kualitas-catatan'] === 'Baik') score += 10; else if (formData['kualitas-catatan'] === 'Cukup') score += 5;
+                    if (formData['kerapian-catatan'] === 'Rapi') score += 5; else if (formData['kerapian-catatan'] === 'Cukup') score += 2.5;
+                    if (formData['keberlanjutan-catatan'] === 'Berurutan') score += 5;
+                    if (formData['kesimpulan-akhir'] === 'Baik') score += 10; else if (formData['kesimpulan-akhir'] === 'Cukup') score += 5;
 
                     setFormData(prev => ({ ...prev, rekapitulasi: score }));
-                }, [formData.kepemilikan, formData.kelengkapan, formData.kondisi, formData.makna, formData.ketepatan, formData.kerapianMakna, formData.catatan, formData.kualitasCatatan, formData.kerapianCatatan, formData.keberlanjutan, formData.kesimpulan]);
+                }, [
+                    formData['kepemilikan-kitab'], formData['kelengkapan-kitab'], formData['kondisi-kitab'], 
+                    formData['makna-kitab'], formData['ketepatan-makna'], formData['kerapian-makna'], 
+                    formData['catatan-kitab'], formData['kualitas-catatan'], formData['kerapian-catatan'], 
+                    formData['keberlanjutan-catatan'], formData['kesimpulan-akhir']
+                ]);
 
                 const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
 
@@ -551,23 +561,23 @@
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-emerald-600 border-b pb-2">Kondisi Kitab</h4>
-                                    <Select name="kepemilikan" label="Kepemilikan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData.kepemilikan}/>
-                                    <Select name="kelengkapan" label="Kelengkapan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData.kelengkapan}/>
-                                    <Select name="kondisi" label="Kondisi Fisik" options={['Baik', 'Cukup', 'Rusak']} onChange={handleChange} value={formData.kondisi}/>
+                                    <Select name="kepemilikan-kitab" label="Kepemilikan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kepemilikan-kitab']}/>
+                                    <Select name="kelengkapan-kitab" label="Kelengkapan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kelengkapan-kitab']}/>
+                                    <Select name="kondisi-kitab" label="Kondisi Fisik" options={['Baik', 'Cukup', 'Rusak']} onChange={handleChange} value={formData['kondisi-kitab']}/>
                                 </div>
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-emerald-600 border-b pb-2">Kualitas Makna</h4>
-                                    <Select name="makna" label="Kelengkapan Makna" options={['Lengkap', 'Cukup', 'Tidak']} onChange={handleChange} value={formData.makna}/>
-                                    <Select name="ketepatan" label="Ketepatan Makna" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData.ketepatan}/>
-                                    <Select name="kerapianMakna" label="Kerapian Makna" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData.kerapianMakna}/>
+                                    <Select name="makna-kitab" label="Kelengkapan Makna" options={['Lengkap', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['makna-kitab']}/>
+                                    <Select name="ketepatan-makna" label="Ketepatan Makna" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['ketepatan-makna']}/>
+                                    <Select name="kerapian-makna" label="Kerapian Makna" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-makna']}/>
                                 </div>
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-emerald-600 border-b pb-2">Catatan & Resume</h4>
-                                    <Select name="catatan" label="Keberadaan Catatan" options={['Ada', 'Tidak']} onChange={handleChange} value={formData.catatan}/>
-                                    <Select name="kualitasCatatan" label="Kualitas Catatan" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData.kualitasCatatan}/>
-                                    <Select name="kerapianCatatan" label="Kerapian Catatan" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData.kerapianCatatan}/>
-                                    <Select name="keberlanjutan" label="Keberlanjutan" options={['Berurutan', 'Tidak']} onChange={handleChange} value={formData.keberlanjutan}/>
-                                    <Select name="kesimpulan" label="Kesimpulan Akhir" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData.kesimpulan}/>
+                                    <Select name="catatan-kitab" label="Keberadaan Catatan" options={['Ada', 'Tidak']} onChange={handleChange} value={formData['catatan-kitab']}/>
+                                    <Select name="kualitas-catatan" label="Kualitas Catatan" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kualitas-catatan']}/>
+                                    <Select name="kerapian-catatan" label="Kerapian Catatan" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-catatan']}/>
+                                    <Select name="keberlanjutan-catatan" label="Keberlanjutan" options={['Berurutan', 'Tidak']} onChange={handleChange} value={formData['keberlanjutan-catatan']}/>
+                                    <Select name="kesimpulan-akhir" label="Kesimpulan Akhir" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kesimpulan-akhir']}/>
                                 </div>
                             </div>
                             
@@ -591,7 +601,7 @@
 
             const TableView = ({ title, columns, data, onAdd, extraHeader }) => {
                 const [searchTerm, setSearchTerm] = useState('');
-                // State untuk filter
+                // State untuk filter dengan key baru
                 const [showFilters, setShowFilters] = useState(false);
                 const [activeFilters, setActiveFilters] = useState({
                     kamar: '',
@@ -601,8 +611,8 @@
                     jurusan: '',
                     kelas: '',
                     jenjang: '',
-                    majelisPagi: '',
-                    majelisSore: ''
+                    'majelis-pagi': '',
+                    'majelis-sore': ''
                 });
 
                 // Helper untuk mendapatkan opsi unik dari data
@@ -618,7 +628,7 @@
                 const clearFilters = () => {
                     setActiveFilters({
                         kamar: '', daerah: '', wilayah: '', pendidikan: '',
-                        jurusan: '', kelas: '', jenjang: '', majelisPagi: '', majelisSore: ''
+                        jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
                     });
                 };
 
@@ -631,8 +641,6 @@
                     // 2. Cek Filters (Hanya jika value filter tidak kosong)
                     const matchesFilters = Object.entries(activeFilters).every(([key, value]) => {
                         if (!value) return true; // Skip jika filter kosong
-                        // Pastikan property ada pada item, jika tidak ada (misal di data barang tidak ada majelis), kita skip atau anggap false.
-                        // Disini kita gunakan String comparison yang aman.
                         return String(item[key]) === String(value);
                     });
 
@@ -680,8 +688,8 @@
                                     <Select label="Jurusan" value={activeFilters.jurusan} onChange={(e) => handleFilterChange('jurusan', e.target.value)} options={getUniqueOptions('jurusan')} />
                                     <Select label="Kelas" value={activeFilters.kelas} onChange={(e) => handleFilterChange('kelas', e.target.value)} options={getUniqueOptions('kelas')} />
                                     <Select label="Jenjang" value={activeFilters.jenjang} onChange={(e) => handleFilterChange('jenjang', e.target.value)} options={getUniqueOptions('jenjang')} />
-                                    <Select label="Majelis Pagi" value={activeFilters.majelisPagi} onChange={(e) => handleFilterChange('majelisPagi', e.target.value)} options={getUniqueOptions('majelisPagi')} />
-                                    <Select label="Majelis Sore" value={activeFilters.majelisSore} onChange={(e) => handleFilterChange('majelisSore', e.target.value)} options={getUniqueOptions('majelisSore')} />
+                                    <Select label="Majelis Pagi" value={activeFilters['majelis-pagi']} onChange={(e) => handleFilterChange('majelis-pagi', e.target.value)} options={getUniqueOptions('majelis-pagi')} />
+                                    <Select label="Majelis Sore" value={activeFilters['majelis-sore']} onChange={(e) => handleFilterChange('majelis-sore', e.target.value)} options={getUniqueOptions('majelis-sore')} />
                                 </div>
                             </Card>
                         )}
@@ -777,8 +785,8 @@
                             { header: 'NIUP', accessor: 'niup' },
                             { header: 'Nama', accessor: 'nama' },
                             { header: 'Kitab', render: (row) => (
-                                <span className={`px-2 py-1 rounded text-xs font-semibold ${row.kepemilikan === 'Ya' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                    {row.kepemilikan}
+                                <span className={`px-2 py-1 rounded text-xs font-semibold ${row['kepemilikan-kitab'] === 'Ya' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {row['kepemilikan-kitab']}
                                 </span>
                             )},
                             { header: 'Rekapitulasi', render: (row) => (
