@@ -34,10 +34,12 @@
         .animate-fade-in { animation: fadeIn 0.5s ease-out; }
         .animate-scale-up { animation: scaleUp 0.3s ease-out; }
         .animate-slide-in-right { animation: slideInRight 0.3s ease-out; }
+        .animate-spin-slow { animation: spin 3s linear infinite; }
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         @keyframes slideInRight { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
         /* Safe area for bottom navigation on iPhone X+ */
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
@@ -55,7 +57,7 @@
         import { 
             LayoutDashboard, Users, Package, Settings, Plus, Save, Search, 
             Trash2, Edit2, CheckCircle, AlertCircle, Menu, X, BookOpen, 
-            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart
+            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart, Loader2
         } from 'lucide-react';
 
         // --- Komponen UI Reusable ---
@@ -179,6 +181,17 @@
             );
         };
 
+        // --- Komponen Loading ---
+        const LoadingScreen = () => (
+            <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center animate-fade-in">
+                <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 animate-bounce">
+                    <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <h2 className="text-xl font-bold text-slate-800">Memuat Data...</h2>
+                <p className="text-slate-500 text-sm mt-2">Mohon tunggu sebentar</p>
+            </div>
+        );
+
         // --- Main App Component ---
 
         function App() {
@@ -189,6 +202,7 @@
             const [webAppUrl, setWebAppUrl] = useState('https://script.google.com/macros/s/AKfycbwTdH0n0IPEFMKrIpflNzxxwIH8vL6evXGtbefzN66X15bnJVgmOkPhmMIoWujjHiyn/exec');
             const [loading, setLoading] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState('idle');
+            const [initialLoadDone, setInitialLoadDone] = useState(false);
             
             // Data State
             const [santriData, setSantriData] = useState([]);
@@ -217,8 +231,8 @@
                     setWebAppUrl(savedUrl);
                 }
                 
-                // Mock Data jika kosong
-                if(santriData.length === 0) {
+                // Mock Data jika kosong (hanya jika belum fetch)
+                if(santriData.length === 0 && !initialLoadDone) {
                     setSantriData([
                     { niup: '12345', nama: 'Ahmad Fauzi', kamar: 'A1', daerah: 'Jawa Timur', kelas: '3 Ulya', jenjang: 'Ulya' }
                     ]);
@@ -228,7 +242,7 @@
             // Effect fetch data saat URL ada
             useEffect(() => {
                 if (webAppUrl) {
-                    fetchData(webAppUrl, true);
+                    fetchData(webAppUrl, false);
                 }
             }, [webAppUrl]);
 
@@ -271,6 +285,7 @@
                     if(!silent) console.error("Gagal mengambil data:", error);
                 } finally {
                     if(!silent) setLoading(false);
+                    setInitialLoadDone(true);
                 }
             };
 
@@ -329,7 +344,6 @@
                 });
             };
 
-            // Definisi 11 Aspek untuk Diagram (Key diupdate sesuai App Script baru)
             const analysisAspects = [
                 { key: 'kepemilikan-kitab', label: 'Kepemilikan Kitab', options: ['Ya', 'Tidak'] },
                 { key: 'kelengkapan-kitab', label: 'Kelengkapan Kitab', options: ['Ya', 'Tidak'] },
@@ -347,11 +361,47 @@
             // --- Views ---
 
             const Dashboard = () => {
+                const [showFilters, setShowFilters] = useState(false);
+                const [activeFilters, setActiveFilters] = useState({
+                    kamar: '', daerah: '', wilayah: '', pendidikan: '',
+                    jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
+                });
+
+                // Helper untuk mendapatkan opsi unik dari data Santri (karena data Barang juga punya field ini)
+                const getUniqueOptions = (key) => {
+                    const values = santriData.map(item => item[key]).filter(val => val !== undefined && val !== '');
+                    return [...new Set(values)].sort();
+                };
+
+                const handleFilterChange = (key, value) => {
+                    setActiveFilters(prev => ({ ...prev, [key]: value }));
+                };
+                
+                const clearFilters = () => {
+                    setActiveFilters({
+                        kamar: '', daerah: '', wilayah: '', pendidikan: '',
+                        jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
+                    });
+                };
+
+                // Filter Logic untuk Dashboard
+                const filterData = (dataToFilter) => {
+                    return dataToFilter.filter(item => {
+                        return Object.entries(activeFilters).every(([key, value]) => {
+                            if (!value) return true;
+                            return String(item[key]) === String(value);
+                        });
+                    });
+                };
+
+                const filteredSantri = filterData(santriData);
+                const filteredBarang = filterData(barangData);
+
                 const stats = [
-                    { label: "Total Santri", value: santriData.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-                    { label: "Data Kepemilikan", value: barangData.length, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
-                    { label: "Belum Input", value: Math.max(0, santriData.length - barangData.length), icon: AlertCircle, color: "text-red-600", bg: "bg-red-50" },
-                    { label: "Predikat Baik", value: barangData.filter(b => b.rekapitulasi >= 80).length, icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
+                    { label: "Total Santri", value: filteredSantri.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+                    { label: "Data Kepemilikan", value: filteredBarang.length, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
+                    { label: "Belum Input", value: Math.max(0, filteredSantri.length - filteredBarang.length), icon: AlertCircle, color: "text-red-600", bg: "bg-red-50" },
+                    { label: "Predikat Baik", value: filteredBarang.filter(b => b.rekapitulasi >= 80).length, icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
                 ];
 
                 return (
@@ -361,10 +411,38 @@
                                 <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
                                 <p className="text-slate-500">Ringkasan data kepesantrenan terkini.</p>
                             </div>
-                            <Button variant="secondary" onClick={() => fetchData(webAppUrl)} disabled={loading}>
-                                {loading ? 'Memuat...' : 'Refresh Data'}
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
+                                    <Filter className="w-5 h-5"/> Filter
+                                </Button>
+                                <Button variant="secondary" onClick={() => fetchData(webAppUrl)} disabled={loading}>
+                                    {loading ? 'Memuat...' : 'Refresh Data'}
+                                </Button>
+                            </div>
                         </div>
+
+                        {/* Filter Section di Dashboard */}
+                        {showFilters && (
+                            <Card className="p-4 bg-slate-50 border-emerald-100 animate-fade-in">
+                                <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
+                                    <h4 className="font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4" /> Filter Data Dashboard</h4>
+                                    <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                                        <XCircle className="w-3 h-3" /> Reset Filter
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                    <Select label="Kamar" value={activeFilters.kamar} onChange={(e) => handleFilterChange('kamar', e.target.value)} options={getUniqueOptions('kamar')} />
+                                    <Select label="Daerah" value={activeFilters.daerah} onChange={(e) => handleFilterChange('daerah', e.target.value)} options={getUniqueOptions('daerah')} />
+                                    <Select label="Wilayah" value={activeFilters.wilayah} onChange={(e) => handleFilterChange('wilayah', e.target.value)} options={getUniqueOptions('wilayah')} />
+                                    <Select label="Pendidikan" value={activeFilters.pendidikan} onChange={(e) => handleFilterChange('pendidikan', e.target.value)} options={getUniqueOptions('pendidikan')} />
+                                    <Select label="Jurusan" value={activeFilters.jurusan} onChange={(e) => handleFilterChange('jurusan', e.target.value)} options={getUniqueOptions('jurusan')} />
+                                    <Select label="Kelas" value={activeFilters.kelas} onChange={(e) => handleFilterChange('kelas', e.target.value)} options={getUniqueOptions('kelas')} />
+                                    <Select label="Jenjang" value={activeFilters.jenjang} onChange={(e) => handleFilterChange('jenjang', e.target.value)} options={getUniqueOptions('jenjang')} />
+                                    <Select label="Majelis Pagi" value={activeFilters['majelis-pagi']} onChange={(e) => handleFilterChange('majelis-pagi', e.target.value)} options={getUniqueOptions('majelis-pagi')} />
+                                    <Select label="Majelis Sore" value={activeFilters['majelis-sore']} onChange={(e) => handleFilterChange('majelis-sore', e.target.value)} options={getUniqueOptions('majelis-sore')} />
+                                </div>
+                            </Card>
+                        )}
 
                         {/* Top Cards Stats */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -392,7 +470,7 @@
                                     <ChartCard 
                                         key={aspect.key}
                                         title={aspect.label}
-                                        stats={calculateAspectStats(barangData, aspect.key, aspect.options)}
+                                        stats={calculateAspectStats(filteredBarang, aspect.key, aspect.options)}
                                     />
                                 ))}
                             </div>
@@ -411,14 +489,14 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {santriData.slice(-5).map((s, i) => (
+                                            {filteredSantri.slice(-5).map((s, i) => (
                                                 <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                                                     <td className="px-4 py-3 font-medium text-slate-800">{s.nama}</td>
                                                     <td className="px-4 py-3">{s.kelas}</td>
                                                     <td className="px-4 py-3">{s.kamar}</td>
                                                 </tr>
                                             ))}
-                                            {santriData.length === 0 && (
+                                            {filteredSantri.length === 0 && (
                                                 <tr><td colSpan="3" className="text-center py-4 text-slate-400">Belum ada data</td></tr>
                                             )}
                                         </tbody>
@@ -444,7 +522,6 @@
             };
 
             const SantriForm = ({ onClose }) => {
-                // UPDATE: Menggunakan key kebab-case
                 const [formData, setFormData] = useState({
                     'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '', 
                     'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
@@ -498,7 +575,6 @@
             };
 
             const BarangForm = ({ onClose, initialData = null }) => {
-                // UPDATE: Menggunakan key kebab-case
                 const defaultData = {
                     'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '',
                     'kepemilikan-kitab': 'Tidak', 'kelengkapan-kitab': 'Tidak', 'kondisi-kitab': 'Rusak', 
@@ -509,7 +585,6 @@
 
                 const [formData, setFormData] = useState(defaultData);
 
-                // Populate data jika edit/create from santri
                 useEffect(() => {
                     if (initialData) {
                         setFormData(prev => ({ ...prev, ...initialData }));
@@ -614,21 +689,12 @@
 
             const TableView = ({ title, columns, data, onAdd, extraHeader }) => {
                 const [searchTerm, setSearchTerm] = useState('');
-                // State untuk filter dengan key baru
                 const [showFilters, setShowFilters] = useState(false);
                 const [activeFilters, setActiveFilters] = useState({
-                    kamar: '',
-                    daerah: '',
-                    wilayah: '',
-                    pendidikan: '',
-                    jurusan: '',
-                    kelas: '',
-                    jenjang: '',
-                    'majelis-pagi': '',
-                    'majelis-sore': ''
+                    kamar: '', daerah: '', wilayah: '', pendidikan: '',
+                    jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
                 });
 
-                // Helper untuk mendapatkan opsi unik dari data
                 const getUniqueOptions = (key) => {
                     const values = data.map(item => item[key]).filter(val => val !== undefined && val !== '');
                     return [...new Set(values)].sort();
@@ -646,17 +712,13 @@
                 };
 
                 const filteredData = data.filter(item => {
-                    // 1. Cek Search
                     const matchesSearch = Object.values(item).some(val => 
                         String(val).toLowerCase().includes(searchTerm.toLowerCase())
                     );
-                    
-                    // 2. Cek Filters (Hanya jika value filter tidak kosong)
                     const matchesFilters = Object.entries(activeFilters).every(([key, value]) => {
-                        if (!value) return true; // Skip jika filter kosong
+                        if (!value) return true; 
                         return String(item[key]) === String(value);
                     });
-
                     return matchesSearch && matchesFilters;
                 });
 
@@ -664,7 +726,10 @@
                     <div className="space-y-6 animate-fade-in">
                         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-800">{title}</h2>
+                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                    {title}
+                                    <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">{filteredData.length}</span>
+                                </h2>
                                 <p className="text-slate-500">Kelola database {title.toLowerCase()} disini.</p>
                             </div>
                             <div className="flex gap-3">
@@ -684,7 +749,6 @@
                             </div>
                         </div>
 
-                        {/* Filter Section */}
                         {showFilters && (
                             <Card className="p-4 bg-slate-50 border-emerald-100 animate-fade-in">
                                 <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
@@ -747,7 +811,6 @@
                 )
             }
 
-            // --- Logic Tampilan Kepemilikan (Barang) ---
             const renderOwnershipView = () => {
                 const filledNiups = new Set(barangData.map(b => String(b.niup)));
                 
@@ -897,6 +960,9 @@
 
             return (
                 <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+                {/* Global Loading Screen */}
+                {loading && santriData.length === 0 && <LoadingScreen />}
+
                 {/* Sidebar Desktop - Disembunyikan di Mobile */}
                 <aside className={`bg-white border-r border-slate-200 hidden md:flex flex-col transition-all duration-300 z-20 ${isSidebarOpen ? 'w-64' : 'w-20'} h-full`}>
                     <div className="h-20 flex items-center justify-center border-b border-slate-100">
