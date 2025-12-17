@@ -230,7 +230,7 @@
                 if (savedUrl) {
                     setWebAppUrl(savedUrl);
                 }
-                // HAPUS MOCK DATA DISINI agar loading screen muncul
+                // Hapus Mock Data untuk memastikan Loading Screen muncul
             }, []);
 
             // Effect fetch data saat URL ada
@@ -352,6 +352,34 @@
                 { key: 'kesimpulan-akhir', label: 'Kesimpulan Akhir', options: ['Baik', 'Cukup', 'Kurang'] },
             ];
 
+            // --- Helper Gabung Data ---
+            // Ini adalah fungsi kunci untuk menyinkronkan data profil Santri ke data Barang
+            const getMergedBarangData = () => {
+                return barangData.map(barang => {
+                    // Cari data santri terbaru berdasarkan NIUP
+                    const santri = santriData.find(s => s.niup === barang.niup);
+                    // Jika ada, timpa data profil di barang dengan data dari santri
+                    if (santri) {
+                        return {
+                            ...barang,
+                            nama: santri.nama,
+                            kamar: santri.kamar,
+                            daerah: santri.daerah,
+                            wilayah: santri.wilayah,
+                            pendidikan: santri.pendidikan,
+                            jurusan: santri.jurusan,
+                            kelas: santri.kelas,
+                            jenjang: santri.jenjang,
+                            'majelis-pagi': santri['majelis-pagi'],
+                            'majelis-sore': santri['majelis-sore'],
+                            'majelis-kamis-pagi': santri['majelis-kamis-pagi'],
+                            'majelis-kamis-sore': santri['majelis-kamis-sore']
+                        };
+                    }
+                    return barang;
+                });
+            };
+
             // --- Views ---
 
             const Dashboard = () => {
@@ -388,8 +416,10 @@
                     });
                 };
 
+                // Gunakan merged data agar filter dashboard akurat dengan kondisi santri terbaru
+                const mergedData = getMergedBarangData();
                 const filteredSantri = filterData(santriData);
-                const filteredBarang = filterData(barangData);
+                const filteredBarang = filterData(mergedData);
 
                 const stats = [
                     { label: "Total Santri", value: filteredSantri.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
@@ -569,8 +599,11 @@
             };
 
             const BarangForm = ({ onClose, initialData = null }) => {
+                // UPDATE: Memuat semua field santri agar tersimpan ke sheet kepemilikan
                 const defaultData = {
                     'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '',
+                    'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
+                    'majelis-pagi': '', 'majelis-sore': '', 'majelis-kamis-pagi': '', 'majelis-kamis-sore': '',
                     'kepemilikan-kitab': 'Tidak', 'kelengkapan-kitab': 'Tidak', 'kondisi-kitab': 'Rusak', 
                     'makna-kitab': 'Tidak', 'ketepatan-makna': 'Kurang', 'kerapian-makna': 'Tidak',
                     'catatan-kitab': 'Tidak', 'kualitas-catatan': 'Kurang', 'kerapian-catatan': 'Tidak',
@@ -642,19 +675,19 @@
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kitab Pegangan Santri</h4>
+                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kondisi Kitab</h4>
                                     <Select name="kepemilikan-kitab" label="Kepemilikan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kepemilikan-kitab']}/>
                                     <Select name="kelengkapan-kitab" label="Kelengkapan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kelengkapan-kitab']}/>
                                     <Select name="kondisi-kitab" label="Kondisi Fisik" options={['Baik', 'Cukup', 'Rusak']} onChange={handleChange} value={formData['kondisi-kitab']}/>
                                 </div>
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kualitas Makna Kitab</h4>
+                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kualitas Makna</h4>
                                     <Select name="makna-kitab" label="Kelengkapan Makna" options={['Lengkap', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['makna-kitab']}/>
                                     <Select name="ketepatan-makna" label="Ketepatan Makna" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['ketepatan-makna']}/>
                                     <Select name="kerapian-makna" label="Kerapian Makna" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-makna']}/>
                                 </div>
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Catatan dan Resume Kitab</h4>
+                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Catatan & Resume</h4>
                                     <Select name="catatan-kitab" label="Keberadaan Catatan" options={['Ada', 'Tidak']} onChange={handleChange} value={formData['catatan-kitab']}/>
                                     <Select name="kualitas-catatan" label="Kualitas Catatan" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kualitas-catatan']}/>
                                     <Select name="kerapian-catatan" label="Kerapian Catatan" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-catatan']}/>
@@ -809,7 +842,10 @@
                 const filledNiups = new Set(barangData.map(b => String(b.niup)));
                 
                 const missingData = santriData.filter(s => !filledNiups.has(String(s.niup)));
-                const filledData = barangData; 
+                
+                // Gunakan Data Gabungan (Merged Data)
+                // Ini memastikan tampilan menggunakan data santri terbaru (misal kamar/kelas berubah)
+                const filledData = getMergedBarangData(); 
 
                 const openForm = (data, mode) => {
                     setEditBarangData(data);
