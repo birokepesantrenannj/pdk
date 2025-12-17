@@ -230,13 +230,7 @@
                 if (savedUrl) {
                     setWebAppUrl(savedUrl);
                 }
-                
-                // Mock Data jika kosong (hanya jika belum fetch)
-                if(santriData.length === 0 && !initialLoadDone) {
-                    setSantriData([
-                    { niup: '12345', nama: 'Ahmad Fauzi', kamar: 'A1', daerah: 'Jawa Timur', kelas: '3 Ulya', jenjang: 'Ulya' }
-                    ]);
-                }
+                // HAPUS MOCK DATA DISINI agar loading screen muncul
             }, []);
 
             // Effect fetch data saat URL ada
@@ -961,7 +955,7 @@
             return (
                 <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
                 {/* Global Loading Screen */}
-                {loading && santriData.length === 0 && <LoadingScreen />}
+                {(!initialLoadDone) && <LoadingScreen />}
 
                 {/* Sidebar Desktop - Disembunyikan di Mobile */}
                 <aside className={`bg-white border-r border-slate-200 hidden md:flex flex-col transition-all duration-300 z-20 ${isSidebarOpen ? 'w-64' : 'w-20'} h-full`}>
