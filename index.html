@@ -35,11 +35,18 @@
         .animate-scale-up { animation: scaleUp 0.3s ease-out; }
         .animate-slide-in-right { animation: slideInRight 0.3s ease-out; }
         .animate-spin-slow { animation: spin 3s linear infinite; }
+        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         @keyframes slideInRight { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes bounceIn { 
+            0% { opacity: 0; transform: scale(0.3) translateY(20px); }
+            50% { opacity: 1; transform: scale(1.05) translateY(-5px); }
+            70% { transform: scale(0.9) translateY(0); }
+            100% { transform: scale(1) translateY(0); }
+        }
         
         /* Safe area for bottom navigation on iPhone X+ */
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
@@ -57,7 +64,7 @@
         import { 
             LayoutDashboard, Users, Package, Settings, Plus, Save, Search, 
             Trash2, Edit2, CheckCircle, AlertCircle, Menu, X, BookOpen, 
-            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart, Loader2
+            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart, Loader2, Info
         } from 'lucide-react';
 
         // --- Komponen UI Reusable ---
@@ -90,7 +97,7 @@
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
                 <input 
                 {...props}
-                className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700 ${props.readOnly ? 'bg-slate-100' : ''}`}
+                className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700 ${props.readOnly ? 'bg-slate-100 cursor-not-allowed' : ''}`}
                 />
             </div>
         );
@@ -115,7 +122,34 @@
             </div>
         );
 
-        // --- Helper Warna Hex untuk Diagram Lingkaran (CSS Conic Gradient) ---
+        // --- Komponen Toast Notification ---
+        const Toast = ({ message, type, onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    onClose();
+                }, 3000); // Hilang otomatis setelah 3 detik
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            const styles = {
+                success: { bg: 'bg-emerald-600', icon: CheckCircle },
+                error: { bg: 'bg-red-500', icon: AlertCircle },
+                info: { bg: 'bg-blue-500', icon: Info },
+            };
+
+            const Style = styles[type] || styles.info;
+            const Icon = Style.icon;
+
+            return (
+                <div className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-white ${Style.bg} animate-bounce-in`}>
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium text-sm">{message}</span>
+                    <button onClick={onClose} className="ml-2 hover:opacity-75"><X className="w-4 h-4" /></button>
+                </div>
+            );
+        };
+
+        // --- Helper Warna Hex untuk Diagram Lingkaran ---
         const getHexColor = (className) => {
             const map = {
                 'bg-emerald-500': '#10b981',
@@ -128,14 +162,12 @@
         };
 
         const ChartCard = ({ title, stats }) => {
-            // Hitung gradient untuk Pie Chart
             const totalCount = stats.reduce((a, b) => a + b.count, 0);
             let cumulativePercent = 0;
             
             const gradientParts = stats.map(stat => {
                 const color = getHexColor(stat.color);
                 const start = cumulativePercent;
-                // Hitung persentase eksak untuk gradient agar presisi
                 const exactPercent = totalCount > 0 ? (stat.count / totalCount) * 100 : 0;
                 cumulativePercent += exactPercent;
                 return `${color} ${start}% ${cumulativePercent}%`;
@@ -152,10 +184,8 @@
                     </div>
                     
                     <div className="flex flex-col items-center flex-1 justify-center">
-                        {/* Diagram Lingkaran (Donut) */}
                         <div className="relative w-32 h-32 rounded-full mb-6 shadow-inner transition-all duration-500" 
                              style={{ background: gradientStyle }}>
-                             {/* Lubang tengah */}
                              <div className="absolute inset-8 bg-white rounded-full flex items-center justify-center shadow-sm">
                                 <div className="text-center">
                                     <span className="text-xs font-semibold text-slate-400 block">Total</span>
@@ -163,8 +193,6 @@
                                 </div>
                              </div>
                         </div>
-
-                        {/* Legenda */}
                         <div className="w-full space-y-2">
                             {stats.map((stat, idx) => (
                                 <div key={idx} className="flex items-center justify-between text-xs">
@@ -181,7 +209,6 @@
             );
         };
 
-        // --- Komponen Loading ---
         const LoadingScreen = () => (
             <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center animate-fade-in">
                 <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 animate-bounce">
@@ -198,25 +225,24 @@
             const [view, setView] = useState('dashboard');
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
             
-            // URL Web App
             const [webAppUrl, setWebAppUrl] = useState('https://script.google.com/macros/s/AKfycbwTdH0n0IPEFMKrIpflNzxxwIH8vL6evXGtbefzN66X15bnJVgmOkPhmMIoWujjHiyn/exec');
             const [loading, setLoading] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState('idle');
             const [initialLoadDone, setInitialLoadDone] = useState(false);
+            const [notification, setNotification] = useState(null); // State notifikasi
             
-            // Data State
             const [santriData, setSantriData] = useState([]);
             const [barangData, setBarangData] = useState([]);
             
-            // State untuk Tab Kepemilikan (missing | filled)
             const [ownershipTab, setOwnershipTab] = useState('missing');
 
-            // State Modal & Edit
+            // State Modals
             const [showSantriModal, setShowSantriModal] = useState(false);
             const [showBarangModal, setShowBarangModal] = useState(false);
+            // State untuk Edit
             const [editBarangData, setEditBarangData] = useState(null);
+            const [editSantriData, setEditSantriData] = useState(null);
 
-            // Definisi Menu Navigation
             const navItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
                 { id: 'santri', label: 'Data Santri', icon: Users },
@@ -224,23 +250,18 @@
                 { id: 'settings', label: 'Pengaturan', icon: Settings },
             ];
 
-            // Load URL & Fetch Data on Mount
+            const showToast = (message, type = 'success') => {
+                setNotification({ message, type });
+            };
+
             useEffect(() => {
                 const savedUrl = localStorage.getItem('pdk_webapp_url');
-                if (savedUrl) {
-                    setWebAppUrl(savedUrl);
-                }
-                // Hapus Mock Data untuk memastikan Loading Screen muncul
+                if (savedUrl) setWebAppUrl(savedUrl);
             }, []);
 
-            // Effect fetch data saat URL ada
             useEffect(() => {
-                if (webAppUrl) {
-                    fetchData(webAppUrl, false);
-                }
+                if (webAppUrl) fetchData(webAppUrl, false);
             }, [webAppUrl]);
-
-            // --- Logic Koneksi ---
 
             const testConnection = async () => {
                 setConnectionStatus('testing');
@@ -249,14 +270,14 @@
                     if (response.ok || response.type === 'opaque') {
                         await fetchData(webAppUrl);
                         setConnectionStatus('success');
-                        alert("Koneksi Berhasil! Aplikasi terhubung ke Google Sheet.");
+                        showToast("Koneksi Berhasil! Aplikasi terhubung.", "success");
                     } else {
                         throw new Error("Response status not OK");
                     }
                 } catch (error) {
                     console.error("Connection Error:", error);
                     setConnectionStatus('error');
-                    alert("Koneksi Gagal. Pastikan URL benar, script dideploy sebagai 'Anyone', dan internet lancar.");
+                    showToast("Koneksi Gagal. Cek URL Pengaturan.", "error");
                 }
             };
 
@@ -285,7 +306,7 @@
 
             const saveDataToSheet = async (type, data) => {
                 if (!webAppUrl) {
-                    alert("URL Web App belum diatur! Masuk ke menu Pengaturan.");
+                    showToast("URL Web App belum diatur!", "error");
                     return;
                 }
 
@@ -298,23 +319,30 @@
                         body: JSON.stringify({ type, data })
                     });
                     
-                    // Update local state (Optimistic UI)
-                    if(type === 'santri') setSantriData([...santriData, data]);
+                    if(type === 'santri') {
+                        const exists = santriData.some(s => s.niup === data.niup);
+                        if (exists) {
+                            const updated = santriData.map(s => s.niup === data.niup ? data : s);
+                            setSantriData(updated);
+                        } else {
+                            setSantriData([...santriData, data]);
+                        }
+                        showToast("Berhasil Menyimpan Data Santri", "success");
+                    }
                     if(type === 'barang') {
                         const filtered = barangData.filter(b => b.niup !== data.niup);
                         setBarangData([...filtered, data]);
+                        showToast("Berhasil Menyimpan Data Kepemilikan", "success");
                     }
                     
-                    alert("Data berhasil disimpan ke Google Sheets!");
                 } catch (error) {
                     console.error(error);
-                    alert("Terjadi kesalahan saat mengirim data.");
+                    showToast("Gagal menyimpan data. Cek koneksi.", "error");
                 } finally {
                     setLoading(false);
                 }
             };
 
-            // --- Logic Analisis Statistik (Dashboard) ---
             const getChartColor = (label) => {
                 const l = label ? label.toLowerCase() : '';
                 if (['ya', 'baik', 'lengkap', 'rapi', 'ada', 'berurutan'].includes(l)) return 'bg-emerald-500';
@@ -352,13 +380,9 @@
                 { key: 'kesimpulan-akhir', label: 'Kesimpulan Akhir', options: ['Baik', 'Cukup', 'Kurang'] },
             ];
 
-            // --- Helper Gabung Data ---
-            // Ini adalah fungsi kunci untuk menyinkronkan data profil Santri ke data Barang
             const getMergedBarangData = () => {
                 return barangData.map(barang => {
-                    // Cari data santri terbaru berdasarkan NIUP
                     const santri = santriData.find(s => s.niup === barang.niup);
-                    // Jika ada, timpa data profil di barang dengan data dari santri
                     if (santri) {
                         return {
                             ...barang,
@@ -380,8 +404,6 @@
                 });
             };
 
-            // --- Views ---
-
             const Dashboard = () => {
                 const [showFilters, setShowFilters] = useState(false);
                 const [activeFilters, setActiveFilters] = useState({
@@ -389,7 +411,6 @@
                     jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
                 });
 
-                // Helper untuk mendapatkan opsi unik dari data Santri (karena data Barang juga punya field ini)
                 const getUniqueOptions = (key) => {
                     const values = santriData.map(item => item[key]).filter(val => val !== undefined && val !== '');
                     return [...new Set(values)].sort();
@@ -406,7 +427,6 @@
                     });
                 };
 
-                // Filter Logic untuk Dashboard
                 const filterData = (dataToFilter) => {
                     return dataToFilter.filter(item => {
                         return Object.entries(activeFilters).every(([key, value]) => {
@@ -416,7 +436,6 @@
                     });
                 };
 
-                // Gunakan merged data agar filter dashboard akurat dengan kondisi santri terbaru
                 const mergedData = getMergedBarangData();
                 const filteredSantri = filterData(santriData);
                 const filteredBarang = filterData(mergedData);
@@ -445,7 +464,6 @@
                             </div>
                         </div>
 
-                        {/* Filter Section di Dashboard */}
                         {showFilters && (
                             <Card className="p-4 bg-slate-50 border-emerald-100 animate-fade-in">
                                 <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
@@ -468,7 +486,6 @@
                             </Card>
                         )}
 
-                        {/* Top Cards Stats */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             {stats.map((stat, idx) => (
                                 <Card key={idx} className="p-6 flex items-center gap-4">
@@ -483,7 +500,6 @@
                             ))}
                         </div>
 
-                        {/* Analysis Charts Section */}
                         <div>
                             <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                                 <Activity className="w-5 h-5 text-emerald-600" />
@@ -499,58 +515,24 @@
                                 ))}
                             </div>
                         </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <Card className="p-6">
-                                <h3 className="font-bold text-slate-800 mb-4">Santri Terbaru</h3>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left text-slate-600">
-                                        <thead className="text-xs text-slate-400 uppercase bg-slate-50">
-                                            <tr>
-                                                <th className="px-4 py-3 rounded-l-lg">Nama</th>
-                                                <th className="px-4 py-3">Kelas</th>
-                                                <th className="px-4 py-3 rounded-r-lg">Kamar</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredSantri.slice(-5).map((s, i) => (
-                                                <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                                                    <td className="px-4 py-3 font-medium text-slate-800">{s.nama}</td>
-                                                    <td className="px-4 py-3">{s.kelas}</td>
-                                                    <td className="px-4 py-3">{s.kamar}</td>
-                                                </tr>
-                                            ))}
-                                            {filteredSantri.length === 0 && (
-                                                <tr><td colSpan="3" className="text-center py-4 text-slate-400">Belum ada data</td></tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </Card>
-                            
-                            <Card className="p-6 bg-gradient-to-br from-emerald-600 to-teal-800 text-white border-none">
-                                <div className="h-full flex flex-col justify-between">
-                                    <div>
-                                        <h3 className="font-bold text-xl mb-2">Selamat Datang di PDK</h3>
-                                        <p className="text-emerald-100 opacity-90">Sistem Pengelolaan Data Kepesantrenan Santri yang terintegrasi. Kelola data santri dan aset intelektual (kitab) dengan mudah dan presisi.</p>
-                                    </div>
-                                    <div className="mt-8 flex gap-3">
-                                        <button onClick={() => setView('santri')} className="bg-white/20 backdrop-blur-sm hover:bg-white/30 px-4 py-2 rounded-lg font-medium transition text-sm">Kelola Santri</button>
-                                        <button onClick={() => setView('barang')} className="bg-white text-emerald-800 hover:bg-emerald-50 px-4 py-2 rounded-lg font-medium transition text-sm">Input Kitab</button>
-                                    </div>
-                                </div>
-                            </Card>
-                        </div>
                     </div>
                 );
             };
 
-            const SantriForm = ({ onClose }) => {
-                const [formData, setFormData] = useState({
+            const SantriForm = ({ onClose, initialData = null }) => {
+                const defaultData = {
                     'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '', 
                     'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
                     'majelis-pagi': '', 'majelis-sore': '', 'majelis-kamis-pagi': '', 'majelis-kamis-sore': ''
-                });
+                };
+
+                const [formData, setFormData] = useState(defaultData);
+
+                useEffect(() => {
+                    if (initialData) {
+                        setFormData(prev => ({ ...prev, ...initialData }));
+                    }
+                }, [initialData]);
 
                 const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
 
@@ -560,37 +542,39 @@
                     onClose();
                 };
 
+                const isEditMode = !!initialData;
+
                 return (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                         <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 animate-scale-up">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">Tambah Data Santri</h3>
+                            <h3 className="text-xl font-bold text-slate-800">{isEditMode ? 'Detail & Edit Data Santri' : 'Tambah Data Santri'}</h3>
                             <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            <Input name="niup" label="NIUP" required onChange={handleChange} />
-                            <Input name="nama" label="Nama Lengkap" required onChange={handleChange} />
-                            <Input name="kamar" label="Kamar" onChange={handleChange} />
-                            <Input name="daerah" label="Daerah" onChange={handleChange} />
-                            <Input name="wilayah" label="Wilayah" onChange={handleChange} />
-                            <Input name="pendidikan" label="Pendidikan Formal" onChange={handleChange} />
-                            <Input name="jurusan" label="Jurusan" onChange={handleChange} />
-                            <Input name="kelas" label="Kelas" onChange={handleChange} />
-                            <Input name="jenjang" label="Jenjang" onChange={handleChange} />
+                            <Input name="niup" label="NIUP" required onChange={handleChange} value={formData.niup} readOnly={isEditMode} />
+                            <Input name="nama" label="Nama Lengkap" required onChange={handleChange} value={formData.nama} />
+                            <Input name="kamar" label="Kamar" onChange={handleChange} value={formData.kamar} />
+                            <Input name="daerah" label="Daerah" onChange={handleChange} value={formData.daerah} />
+                            <Input name="wilayah" label="Wilayah" onChange={handleChange} value={formData.wilayah} />
+                            <Input name="pendidikan" label="Pendidikan Formal" onChange={handleChange} value={formData.pendidikan} />
+                            <Input name="jurusan" label="Jurusan" onChange={handleChange} value={formData.jurusan} />
+                            <Input name="kelas" label="Kelas" onChange={handleChange} value={formData.kelas} />
+                            <Input name="jenjang" label="Jenjang" onChange={handleChange} value={formData.jenjang} />
                             
                             <div className="col-span-full border-t border-slate-100 pt-4 mt-2">
                                 <h4 className="text-sm font-bold text-emerald-600 mb-4 uppercase tracking-wide">Data Majelis</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <Input name="majelis-pagi" label="Majelis Pagi" onChange={handleChange} />
-                                    <Input name="majelis-sore" label="Majelis Sore" onChange={handleChange} />
-                                    <Input name="majelis-kamis-pagi" label="Majelis Kamis Pagi" onChange={handleChange} />
-                                    <Input name="majelis-kamis-sore" label="Majelis Kamis Sore" onChange={handleChange} />
+                                    <Input name="majelis-pagi" label="Majelis Pagi" onChange={handleChange} value={formData['majelis-pagi']} />
+                                    <Input name="majelis-sore" label="Majelis Sore" onChange={handleChange} value={formData['majelis-sore']} />
+                                    <Input name="majelis-kamis-pagi" label="Majelis Kamis Pagi" onChange={handleChange} value={formData['majelis-kamis-pagi']} />
+                                    <Input name="majelis-kamis-sore" label="Majelis Kamis Sore" onChange={handleChange} value={formData['majelis-kamis-sore']} />
                                 </div>
                             </div>
 
                             <div className="col-span-full flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
                                 <Button variant="secondary" onClick={onClose}>Batal</Button>
-                                <Button type="submit" disabled={loading}>{loading ? 'Menyimpan...' : 'Simpan Data'}</Button>
+                                <Button type="submit" disabled={loading}>{loading ? 'Menyimpan...' : (isEditMode ? 'Simpan Perubahan' : 'Simpan Data')}</Button>
                             </div>
                         </form>
                         </Card>
@@ -599,7 +583,6 @@
             };
 
             const BarangForm = ({ onClose, initialData = null }) => {
-                // UPDATE: Memuat semua field santri agar tersimpan ke sheet kepemilikan
                 const defaultData = {
                     'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '',
                     'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
@@ -607,7 +590,7 @@
                     'kepemilikan-kitab': 'Tidak', 'kelengkapan-kitab': 'Tidak', 'kondisi-kitab': 'Rusak', 
                     'makna-kitab': 'Tidak', 'ketepatan-makna': 'Kurang', 'kerapian-makna': 'Tidak',
                     'catatan-kitab': 'Tidak', 'kualitas-catatan': 'Kurang', 'kerapian-catatan': 'Tidak',
-                    'keberlanjutan-catatan': 'Tidak', 'kesimpulan-akhir': 'Kurang', 'rekapitulasi': 0
+                    'keberlanjutan-catatan': 'Tidak', 'kesimpulan-akhir': 'Kurang', 'keterangan': '', 'rekapitulasi': 0
                 };
 
                 const [formData, setFormData] = useState(defaultData);
@@ -695,6 +678,18 @@
                                     <Select name="kesimpulan-akhir" label="Kesimpulan Akhir" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kesimpulan-akhir']}/>
                                 </div>
                             </div>
+
+                            <div className="mt-6">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Keterangan</label>
+                                <textarea 
+                                    name="keterangan" 
+                                    value={formData['keterangan'] || ''} 
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700"
+                                    rows="3"
+                                    placeholder="Tulis keterangan atau catatan tambahan di sini..."
+                                ></textarea>
+                            </div>
                             
                             <div className="mt-8 flex items-center justify-between bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                                 <div>
@@ -714,7 +709,7 @@
                 );
             };
 
-            const TableView = ({ title, columns, data, onAdd, extraHeader }) => {
+            const TableView = ({ title, columns, data, onAdd, extraHeader, onRowDoubleClick }) => {
                 const [searchTerm, setSearchTerm] = useState('');
                 const [showFilters, setShowFilters] = useState(false);
                 const [activeFilters, setActiveFilters] = useState({
@@ -806,16 +801,20 @@
                                     <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
                                         <tr>
                                             {columns.map((col, idx) => (
-                                                <th key={idx} className="px-6 py-4 font-semibold">{col.header}</th>
+                                                <th key={idx} className="px-6 py-4 font-semibold whitespace-nowrap">{col.header}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {filteredData.map((row, idx) => (
-                                            <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                            <tr 
+                                                key={idx} 
+                                                className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                                                onDoubleClick={() => onRowDoubleClick && onRowDoubleClick(row)}
+                                            >
                                                 {columns.map((col, cIdx) => (
-                                                    <td key={cIdx} className="px-6 py-4">
-                                                        {col.render ? col.render(row) : row[col.accessor]}
+                                                    <td key={cIdx} className="px-6 py-4 whitespace-nowrap">
+                                                        {col.render ? col.render(row, idx) : row[col.accessor]}
                                                     </td>
                                                 ))}
                                             </tr>
@@ -832,6 +831,7 @@
                             </div>
                             <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 text-xs text-slate-500 flex justify-between items-center">
                                 <span>Menampilkan {filteredData.length} dari {data.length} data</span>
+                                <span className="text-slate-400 italic">Klik 2x pada baris untuk detail/edit</span>
                             </div>
                         </Card>
                     </div>
@@ -842,9 +842,6 @@
                 const filledNiups = new Set(barangData.map(b => String(b.niup)));
                 
                 const missingData = santriData.filter(s => !filledNiups.has(String(s.niup)));
-                
-                // Gunakan Data Gabungan (Merged Data)
-                // Ini memastikan tampilan menggunakan data santri terbaru (misal kamar/kelas berubah)
                 const filledData = getMergedBarangData(); 
 
                 const openForm = (data, mode) => {
@@ -878,6 +875,7 @@
                             </div>
                         }
                         columns={ownershipTab === 'missing' ? [
+                            { header: 'No', render: (_, idx) => idx + 1 },
                             { header: 'NIUP', accessor: 'niup' },
                             { header: 'Nama', accessor: 'nama' },
                             { header: 'Kamar', accessor: 'kamar' },
@@ -888,6 +886,7 @@
                                 </Button>
                             )}
                         ] : [
+                            { header: 'No', render: (_, idx) => idx + 1 },
                             { header: 'NIUP', accessor: 'niup' },
                             { header: 'Nama', accessor: 'nama' },
                             { header: 'Kitab', render: (row) => (
@@ -931,7 +930,7 @@
                                     />
                                     <Button onClick={() => {
                                         localStorage.setItem('pdk_webapp_url', webAppUrl);
-                                        alert("URL tersimpan!");
+                                        showToast("URL tersimpan!", "success");
                                     }}>
                                         <Save className="w-4 h-4" /> Simpan
                                     </Button>
@@ -992,6 +991,15 @@
                 <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
                 {/* Global Loading Screen */}
                 {(!initialLoadDone) && <LoadingScreen />}
+                
+                {/* Toast Notification */}
+                {notification && (
+                    <Toast 
+                        message={notification.message} 
+                        type={notification.type} 
+                        onClose={() => setNotification(null)} 
+                    />
+                )}
 
                 {/* Sidebar Desktop - Disembunyikan di Mobile */}
                 <aside className={`bg-white border-r border-slate-200 hidden md:flex flex-col transition-all duration-300 z-20 ${isSidebarOpen ? 'w-64' : 'w-20'} h-full`}>
@@ -1045,14 +1053,29 @@
                             <TableView 
                                 title="Data Santri"
                                 data={santriData}
-                                onAdd={() => setShowSantriModal(true)}
+                                onAdd={() => {
+                                    setEditSantriData(null);
+                                    setShowSantriModal(true);
+                                }}
+                                onRowDoubleClick={(row) => {
+                                    setEditSantriData(row);
+                                    setShowSantriModal(true);
+                                }}
                                 columns={[
+                                    { header: 'No', render: (_, idx) => idx + 1 },
                                     { header: 'NIUP', accessor: 'niup' },
                                     { header: 'Nama', accessor: 'nama' },
                                     { header: 'Kamar', accessor: 'kamar' },
+                                    { header: 'Daerah', accessor: 'daerah' },
+                                    { header: 'Wilayah', accessor: 'wilayah' },
+                                    { header: 'Pendidikan', accessor: 'pendidikan' },
+                                    { header: 'Jurusan', accessor: 'jurusan' },
                                     { header: 'Kelas', accessor: 'kelas' },
                                     { header: 'Jenjang', accessor: 'jenjang' },
-                                    { header: 'Wilayah', accessor: 'wilayah' },
+                                    { header: 'Majelis Pagi', accessor: 'majelis-pagi' },
+                                    { header: 'Majelis Sore', accessor: 'majelis-sore' },
+                                    { header: 'Majelis Kamis Pagi', accessor: 'majelis-kamis-pagi' },
+                                    { header: 'Majelis Kamis Sore', accessor: 'majelis-kamis-sore' },
                                 ]}
                             />
                         )}
@@ -1086,7 +1109,7 @@
                 </main>
 
                 {/* Modals */}
-                {showSantriModal && <SantriForm onClose={() => setShowSantriModal(false)} />}
+                {showSantriModal && <SantriForm onClose={() => setShowSantriModal(false)} initialData={editSantriData} />}
                 {showBarangModal && <BarangForm onClose={() => setShowBarangModal(false)} initialData={editBarangData} />}
                 </div>
             );
