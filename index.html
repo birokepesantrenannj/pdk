@@ -64,7 +64,7 @@
         import { 
             LayoutDashboard, Users, Package, Settings, Plus, Save, Search, 
             Trash2, Edit2, CheckCircle, AlertCircle, Menu, X, BookOpen, 
-            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart, Loader2, Info
+            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart, Loader2, Info, BarChart2
         } from 'lucide-react';
 
         // --- Komponen UI Reusable ---
@@ -127,7 +127,7 @@
             useEffect(() => {
                 const timer = setTimeout(() => {
                     onClose();
-                }, 3000); // Hilang otomatis setelah 3 detik
+                }, 3000); 
                 return () => clearTimeout(timer);
             }, [onClose]);
 
@@ -209,6 +209,29 @@
             );
         };
 
+        const AverageCard = ({ title, data }) => (
+            <Card className="p-5">
+                <h4 className="font-bold text-slate-800 text-sm mb-4 border-b border-slate-100 pb-2">{title}</h4>
+                <div className="space-y-3">
+                    {data.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600 font-medium">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-emerald-500 rounded-full" 
+                                        style={{ width: `${Math.min(100, (item.value / 100) * 100)}%` }} 
+                                    ></div>
+                                </div>
+                                <span className="text-sm font-bold text-emerald-600 w-8 text-right">{item.value}</span>
+                            </div>
+                        </div>
+                    ))}
+                    {data.length === 0 && <p className="text-xs text-slate-400 italic">Tidak ada data</p>}
+                </div>
+            </Card>
+        );
+
         const LoadingScreen = () => (
             <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center animate-fade-in">
                 <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 animate-bounce">
@@ -229,17 +252,15 @@
             const [loading, setLoading] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState('idle');
             const [initialLoadDone, setInitialLoadDone] = useState(false);
-            const [notification, setNotification] = useState(null); // State notifikasi
+            const [notification, setNotification] = useState(null); 
             
             const [santriData, setSantriData] = useState([]);
             const [barangData, setBarangData] = useState([]);
             
             const [ownershipTab, setOwnershipTab] = useState('missing');
 
-            // State Modals
             const [showSantriModal, setShowSantriModal] = useState(false);
             const [showBarangModal, setShowBarangModal] = useState(false);
-            // State untuk Edit
             const [editBarangData, setEditBarangData] = useState(null);
             const [editSantriData, setEditSantriData] = useState(null);
 
@@ -252,6 +273,40 @@
 
             const showToast = (message, type = 'success') => {
                 setNotification({ message, type });
+            };
+
+            // --- Fungsi Parse Angka yang Kuat (Robust) ---
+            const robustParseFloat = (val) => {
+                if (val === undefined || val === null || val === '') return 0;
+                if (typeof val === 'number') return val;
+                // Ganti koma dengan titik, hapus karakter aneh
+                const str = String(val).replace(',', '.').replace(/[^0-9.-]/g, '');
+                const num = parseFloat(str);
+                return isFinite(num) ? num : 0;
+            };
+
+            // --- Hitung Rata-rata per Kelompok ---
+            const calculateGroupAverages = (data, groupKey) => {
+                const groups = {};
+                let hasData = false;
+                
+                data.forEach(item => {
+                    // Pastikan key ada, atau masuk kategori 'Lainnya'
+                    const key = item[groupKey] || 'Lainnya'; 
+                    // Gunakan fungsi robustParseFloat untuk rekapitulasi
+                    const val = robustParseFloat(item.rekapitulasi);
+                    
+                    if (!groups[key]) groups[key] = { sum: 0, count: 0 };
+                    groups[key].sum += val;
+                    groups[key].count += 1;
+                    hasData = true;
+                });
+
+                if (!hasData) return [];
+
+                return Object.entries(groups)
+                    .map(([label, { sum, count }]) => ({ label, value: (sum / count).toFixed(1) }))
+                    .sort((a, b) => b.value - a.value); // Urutkan dari nilai tertinggi
             };
 
             useEffect(() => {
@@ -440,11 +495,26 @@
                 const filteredSantri = filterData(santriData);
                 const filteredBarang = filterData(mergedData);
 
+                // --- KALKULASI RATA-RATA ---
+                // Menggunakan robustParseFloat untuk memastikan angka terbaca meski ada koma atau format text
+                const validScores = filteredBarang
+                    .map(item => robustParseFloat(item.rekapitulasi));
+                
+                const overallAvg = validScores.length > 0 
+                    ? (validScores.reduce((sum, val) => sum + val, 0) / validScores.length).toFixed(1)
+                    : "0.0";
+
+                const avgWilayah = calculateGroupAverages(filteredBarang, 'wilayah');
+                const avgDaerah = calculateGroupAverages(filteredBarang, 'daerah');
+                const avgPendidikan = calculateGroupAverages(filteredBarang, 'pendidikan');
+                const avgMajelisPagi = calculateGroupAverages(filteredBarang, 'majelis-pagi');
+                const avgMajelisSore = calculateGroupAverages(filteredBarang, 'majelis-sore');
+
                 const stats = [
                     { label: "Total Santri", value: filteredSantri.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
                     { label: "Data Kepemilikan", value: filteredBarang.length, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
                     { label: "Belum Input", value: Math.max(0, filteredSantri.length - filteredBarang.length), icon: AlertCircle, color: "text-red-600", bg: "bg-red-50" },
-                    { label: "Predikat Baik", value: filteredBarang.filter(b => b.rekapitulasi >= 80).length, icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
+                    { label: "Predikat Baik", value: filteredBarang.filter(b => robustParseFloat(b.rekapitulasi) >= 80).length, icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
                 ];
 
                 return (
@@ -499,6 +569,38 @@
                                 </Card>
                             ))}
                         </div>
+
+                        {/* --- Statistics Rows (5 Baris sesuai permintaan) --- */}
+                        
+                        {/* Baris 1: Nilai Rata-rata Keseluruhan */}
+                        <Card className="p-6 bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-600 text-white flex items-center justify-between shadow-xl shadow-teal-500/30 border-none relative overflow-hidden">
+                            <div className="relative z-10">
+                                <h3 className="text-xl font-bold text-white mb-1">Nilai Rata-rata Keseluruhan</h3>
+                                <p className="text-xs text-white/80">Dihitung dari {filteredBarang.length} santri yang sudah dinilai</p>
+                            </div>
+                            <div className="text-6xl font-black tracking-tighter relative z-10">{overallAvg}</div>
+                            
+                            {/* Decorative background shapes */}
+                            <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                            <div className="absolute top-0 right-1/4 w-24 h-24 bg-teal-400/20 rounded-full blur-xl"></div>
+                        </Card>
+
+                        {/* Baris 2: Rata-rata per Wilayah */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <AverageCard title="Rata-rata Nilai per Wilayah" data={avgWilayah} />
+                            
+                            {/* Baris 3: Rata-rata per Daerah */}
+                            <AverageCard title="Rata-rata Nilai per Daerah" data={avgDaerah} />
+                        </div>
+
+                        {/* Baris 4: Rata-rata per Majelis */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <AverageCard title="Rata-rata Majelis Pagi" data={avgMajelisPagi} />
+                            <AverageCard title="Rata-rata Majelis Sore" data={avgMajelisSore} />
+                        </div>
+
+                        {/* Baris 5: Rata-rata per Pendidikan */}
+                        <AverageCard title="Rata-rata Nilai per Pendidikan" data={avgPendidikan} />
 
                         <div>
                             <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -658,19 +760,19 @@
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kondisi Kitab</h4>
+                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kitab Pegangan Santri</h4>
                                     <Select name="kepemilikan-kitab" label="Kepemilikan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kepemilikan-kitab']}/>
                                     <Select name="kelengkapan-kitab" label="Kelengkapan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kelengkapan-kitab']}/>
                                     <Select name="kondisi-kitab" label="Kondisi Fisik" options={['Baik', 'Cukup', 'Rusak']} onChange={handleChange} value={formData['kondisi-kitab']}/>
                                 </div>
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kualitas Makna</h4>
+                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kualitas Makna Kitab</h4>
                                     <Select name="makna-kitab" label="Kelengkapan Makna" options={['Lengkap', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['makna-kitab']}/>
                                     <Select name="ketepatan-makna" label="Ketepatan Makna" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['ketepatan-makna']}/>
                                     <Select name="kerapian-makna" label="Kerapian Makna" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-makna']}/>
                                 </div>
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Catatan & Resume</h4>
+                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Catatan dan Resume Kitab</h4>
                                     <Select name="catatan-kitab" label="Keberadaan Catatan" options={['Ada', 'Tidak']} onChange={handleChange} value={formData['catatan-kitab']}/>
                                     <Select name="kualitas-catatan" label="Kualitas Catatan" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kualitas-catatan']}/>
                                     <Select name="kerapian-catatan" label="Kerapian Catatan" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-catatan']}/>
