@@ -1,1225 +1,1102 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PDK - Pengelolaan Data Kepesantrenan</title>
-    <meta name="description" content="Aplikasi Manajemen Data Santri dan Kitab">
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  CalendarCheck, 
+  Moon, 
+  Sun, 
+  Plus, 
+  Save, 
+  Trash2, 
+  Search, 
+  Menu, 
+  Coffee,
+  AlertCircle,
+  CheckCircle2,
+  Settings,
+  FileText,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Download,
+  Loader2,
+  CalendarOff,
+  X,
+  Edit3,
+  Clock,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+
+// --- INITIAL CONFIG ---
+const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwdRcretj2IgsFPOdLaVorx9j53QseaFcJ4UTRWBYTnSzmpW4mCLTAgXpdSv0Ruxb9J/exec";
+
+// --- HELPERS ---
+const getWIBDateString = () => {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+};
+
+// --- MOCK DATA ---
+const MOCK_PENGURUS = [
+  { id: 1, niup: '2026001', nama: 'Ust. Ahmad Zaini', jabatan: 'Kepala Biro' },
+  { id: 2, niup: '2026002', nama: 'Ust. Faisal Reza', jabatan: 'Sekretaris' },
+];
+
+const MOCK_ABSENSI = [
+  { id: 1, tanggal: '2026-01-01', niup: '2026001', nama: 'Ust. Ahmad Zaini', status: 'Hadir', shift: 'Pagi', keterangan: '' },
+];
+
+// --- COMPONENTS ---
+
+const Card = ({ children, className = "" }) => (
+  <div className={`bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl overflow-hidden ${className}`}>
+    {children}
+  </div>
+);
+
+const Badge = ({ status, mini = false }) => {
+  const colors = {
+    Hadir: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    Sakit: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+    Izin: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    Alpha: 'bg-red-500/20 text-red-300 border-red-500/30',
+    Libur: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  };
+  
+  if (mini) {
+     const miniColors = {
+        Hadir: 'bg-emerald-500 text-white',
+        Sakit: 'bg-yellow-500 text-black',
+        Izin: 'bg-blue-500 text-white',
+        Alpha: 'bg-red-500 text-white',
+     };
+     return (
+        <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${miniColors[status] || 'bg-gray-700'}`} title={status}>
+            {status ? status.charAt(0) : '-'}
+        </div>
+     );
+  }
+
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${colors[status] || colors.Alpha}`}>
+      {status}
+    </span>
+  );
+};
+
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#1a1a2e] border border-white/20 rounded-2xl w-full max-w-md p-6 relative animate-fade-in shadow-2xl">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-white">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Data State
+  const [pengurus, setPengurus] = useState(MOCK_PENGURUS);
+  const [absensi, setAbsensi] = useState(MOCK_ABSENSI);
+  const [dataLibur, setDataLibur] = useState([]);
+  const [jadwalSore, setJadwalSore] = useState({}); 
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Settings State
+  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
+  const [connectionStatus, setConnectionStatus] = useState('idle');
+  const [lastSync, setLastSync] = useState(null);
+
+  // --- LOGIC ---
+  const todayStr = getWIBDateString();
+  const todayDate = new Date();
+  const isFriday = todayDate.getDay() === 5;
+
+  const fetchData = async () => {
+    if (!apiUrl) return;
+    setIsLoading(true);
+    setConnectionStatus('testing');
     
-    <!-- 1. Tailwind CSS (Styling) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 2. Konfigurasi Import Map untuk React & Icons via CDN -->
-    <script type="importmap">
-    {
-        "imports": {
-            "react": "https://esm.sh/react@18.2.0",
-            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "lucide-react": "https://esm.sh/lucide-react@0.294.0"
-        }
+    try {
+      const [resPengurus, resAbsensi, resLibur, resJadwal] = await Promise.all([
+        fetch(`${apiUrl}?action=getPengurus`),
+        fetch(`${apiUrl}?action=getAbsensi`),
+        fetch(`${apiUrl}?action=getLibur`),
+        fetch(`${apiUrl}?action=getJadwalSore`)
+      ]);
+
+      const dataPengurus = await resPengurus.json();
+      const dataAbsensi = await resAbsensi.json();
+      const dataLiburRes = await resLibur.json();
+      const dataJadwalRes = await resJadwal.json();
+      
+      if (dataPengurus.status === 'success') {
+        setPengurus(dataPengurus.data);
+        setConnectionStatus('success');
+      }
+
+      if (dataAbsensi.status === 'success') setAbsensi(dataAbsensi.data);
+      if (dataLiburRes.status === 'success') setDataLibur(dataLiburRes.data);
+      if (dataJadwalRes.status === 'success') {
+         const mapJadwal = {};
+         dataJadwalRes.data.forEach(item => {
+            try {
+                mapJadwal[item.hari] = JSON.parse(item.petugas);
+            } catch(e) {
+                mapJadwal[item.hari] = [];
+            }
+         });
+         setJadwalSore(mapJadwal);
+      }
+
+      setLastSync(new Date());
+
+    } catch (error) {
+      console.error("Connection failed", error);
+      setConnectionStatus('error');
+    } finally {
+      setIsLoading(false);
     }
-    </script>
-    
-    <!-- 3. Babel Standalone (Untuk compile JSX di browser) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  };
 
-    <!-- Custom Styles untuk Scrollbar & Animasi -->
-    <style>
-        body { -webkit-tap-highlight-color: transparent; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Statistik Dashboard
+  const stats = useMemo(() => {
+    const totalPengurus = pengurus.length;
+    
+    const isLiburManual = dataLibur.some(l => l.tanggal === todayStr);
+
+    const todayAbsensi = absensi.filter(a => a.tanggal === todayStr);
+    const hadirHariIni = todayAbsensi.filter(a => a.status === 'Hadir').length;
+    const attendanceRate = totalPengurus > 0 ? Math.round((hadirHariIni / totalPengurus) * 100) : 0;
+    
+    return {
+      total: totalPengurus,
+      hadir: hadirHariIni,
+      rate: attendanceRate,
+      sakit: todayAbsensi.filter(a => a.status === 'Sakit').length,
+      izin: todayAbsensi.filter(a => a.status === 'Izin').length,
+      statusHariIni: isFriday || isLiburManual ? 'Libur' : 'Masuk'
+    };
+  }, [pengurus, absensi, dataLibur, todayStr, isFriday]);
+
+  // --- MENU CONFIG ---
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'pengurus', label: 'Data Pengurus', icon: Users },
+    { id: 'absensi', label: 'Absensi', icon: CalendarCheck },
+    { id: 'rekap', label: 'Rekapitulasi', icon: FileText },
+    { id: 'jadwal', label: 'Kantor Sore', icon: Moon },
+    { id: 'libur', label: 'Data Libur', icon: CalendarOff },
+    { id: 'settings', label: 'Pengaturan', icon: Settings },
+  ];
+
+  // --- VIEWS ---
+
+  const DashboardView = () => (
+    <div className="space-y-6 animate-fade-in">
+      {connectionStatus === 'error' && (
+        <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center gap-3">
+          <WifiOff size={20} />
+          <span>Koneksi ke Google Sheet gagal. Menggunakan data lokal. Cek menu Pengaturan.</span>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-6 bg-gradient-to-br from-indigo-500/20 to-purple-500/20">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-indigo-200 text-sm font-medium">Total Pengurus</p>
+              <h3 className="text-4xl font-bold text-white mt-2">{stats.total}</h3>
+            </div>
+            <div className="p-3 bg-indigo-500/30 rounded-lg text-white">
+              <Users size={24} />
+            </div>
+          </div>
+        </Card>
         
-        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
-        .animate-scale-up { animation: scaleUp 0.3s ease-out; }
-        .animate-slide-in-right { animation: slideInRight 0.3s ease-out; }
-        .animate-spin-slow { animation: spin 3s linear infinite; }
-        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        <Card className="p-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-emerald-200 text-sm font-medium">Hadir Hari Ini</p>
+              <h3 className="text-4xl font-bold text-white mt-2">{stats.hadir}</h3>
+            </div>
+            <div className="p-3 bg-emerald-500/30 rounded-lg text-white">
+              <CheckCircle2 size={24} />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6 bg-gradient-to-br from-pink-500/20 to-rose-500/20">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-pink-200 text-sm font-medium">Kehadiran (%)</p>
+              <h3 className="text-4xl font-bold text-white mt-2">{stats.rate}%</h3>
+            </div>
+            <div className="p-3 bg-pink-500/30 rounded-lg text-white">
+              <LayoutDashboard size={24} />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6 bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-amber-200 text-sm font-medium">Sakit / Izin</p>
+              <h3 className="text-4xl font-bold text-white mt-2">{stats.sakit + stats.izin}</h3>
+            </div>
+            <div className="p-3 bg-amber-500/30 rounded-lg text-white">
+              <AlertCircle size={24} />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="p-6 min-h-[300px]">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <CalendarCheck className="text-indigo-400" /> Status Hari Ini
+          </h3>
+          <div className="space-y-4">
+             <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                <span className="text-gray-300">Hari</span>
+                <span className="font-bold text-white">{new Date().toLocaleDateString('id-ID', { weekday: 'long' })}</span>
+             </div>
+             <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                <span className="text-gray-300">Status Operasional</span>
+                {stats.statusHariIni === 'Libur' ? (
+                  <span className="text-red-400 font-bold flex items-center gap-2"><Coffee size={18}/> LIBUR (Jum'at / Tgl Merah)</span>
+                ) : (
+                  <span className="text-emerald-400 font-bold flex items-center gap-2"><Sun size={18}/> Buka Normal</span>
+                )}
+             </div>
+          </div>
+        </Card>
         
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        @keyframes slideInRight { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes bounceIn { 
-            0% { opacity: 0; transform: scale(0.3) translateY(20px); }
-            50% { opacity: 1; transform: scale(1.05) translateY(-5px); }
-            70% { transform: scale(0.9) translateY(0); }
-            100% { transform: scale(1) translateY(0); }
+        <Card className="p-6">
+           <h3 className="text-xl font-bold text-white mb-4">Agenda Libur Terdekat</h3>
+           <div className="space-y-3">
+             {dataLibur.length > 0 ? dataLibur.map((l, i) => (
+                <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+                    <span className="text-red-300 font-medium">{l.tanggal}</span>
+                    <span className="text-gray-300 text-sm">{l.keterangan}</span>
+                </div>
+             )) : (
+                 <p className="text-gray-500 text-sm">Tidak ada data libur.</p>
+             )}
+           </div>
+        </Card>
+      </div>
+    </div>
+  );
+
+  const AbsensiView = () => {
+    const [selectedDate, setSelectedDate] = useState(getWIBDateString());
+    const [selectedShift, setSelectedShift] = useState('Pagi');
+    const isTodayFriday = new Date(selectedDate).getDay() === 5;
+    const isTodayLibur = dataLibur.some(l => l.tanggal === selectedDate);
+
+    const [statusMap, setStatusMap] = useState({});
+    const [ketMap, setKetMap] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // LOGIC: Filter pengurus berdasarkan Jadwal Kantor Sore
+    const pendingPengurus = useMemo(() => {
+        // 1. Tentukan Nama Hari (Ahad, Senin, dst) dari selectedDate
+        const days = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const dayIndex = new Date(selectedDate).getDay(); // 0 = Ahad
+        const dayName = days[dayIndex];
+
+        // 2. Ambil List NIUP yang jadwal sore hari ini
+        const jadwalHariIni = jadwalSore[dayName] || [];
+        const soreNiups = jadwalHariIni.map(p => p.niup);
+
+        // 3. Filter daftar pengurus sesuai Shift yang dipilih
+        let targetList = [];
+        if (selectedShift === 'Sore') {
+            // Shift Sore: Hanya tampilkan yang ada di jadwal sore
+            targetList = pengurus.filter(p => soreNiups.includes(p.niup));
+        } else {
+            // Shift Pagi: Tampilkan SEMUA KECUALI yang jadwal sore
+            targetList = pengurus.filter(p => !soreNiups.includes(p.niup));
+        }
+
+        // 4. Sembunyikan yang sudah absen pada tanggal & shift ini
+        return targetList.filter(p => {
+            const alreadyRecorded = absensi.some(
+                log => log.niup === p.niup && log.tanggal === selectedDate && log.shift === selectedShift
+            );
+            return !alreadyRecorded;
+        });
+    }, [pengurus, absensi, selectedDate, selectedShift, jadwalSore]);
+
+    const handleAbsenChange = (niup, status) => {
+        setStatusMap(prev => ({ ...prev, [niup]: status }));
+    };
+
+    const handleKetChange = (niup, ket) => {
+        setKetMap(prev => ({ ...prev, [niup]: ket }));
+    };
+
+    const handleSubmit = async () => {
+        if (Object.keys(statusMap).length === 0) {
+            return alert("Pilih minimal satu status kehadiran.");
         }
         
-        /* Safe area for bottom navigation on iPhone X+ */
-        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
-    </style>
-</head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden">
-    
-    <!-- Container Utama React -->
-    <div id="root"></div>
-
-    <!-- Kode Aplikasi React -->
-    <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo } from 'react';
-        import { createRoot } from 'react-dom/client';
-        import { 
-            LayoutDashboard, Users, Package, Settings, Plus, Save, Search, 
-            Trash2, Edit2, CheckCircle, AlertCircle, Menu, X, BookOpen, 
-            TrendingUp, Award, Wifi, WifiOff, Activity, UserPlus, Filter, XCircle, PieChart, Loader2, Info, BarChart2
-        } from 'lucide-react';
-
-        // --- Komponen UI Reusable ---
-
-        const Card = ({ children, className = "" }) => (
-            <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all duration-300 ${className}`}>
-                {children}
-            </div>
-        );
-
-        const Button = ({ children, onClick, variant = 'primary', className = "", disabled = false, type = "button" }) => {
-            const baseStyle = "px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
-            const variants = {
-                primary: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200",
-                secondary: "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300",
-                danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100",
-                ghost: "bg-transparent text-slate-500 hover:bg-slate-100",
-                success: "bg-green-100 text-green-700 border border-green-200 hover:bg-green-200",
-                info: "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100"
+        setIsSubmitting(true);
+        const records = Object.keys(statusMap).map(niup => {
+            const p = pengurus.find(item => item.niup === niup);
+            return {
+                niup: niup,
+                nama: p?.nama || 'Unknown',
+                status: statusMap[niup],
+                shift: selectedShift,
+                keterangan: ketMap[niup] || ''
             };
-            return (
-                <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
-                {children}
-                </button>
-            );
-        };
+        });
 
-        const Input = ({ label, ...props }) => (
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
-                <input 
-                {...props}
-                className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700 ${props.readOnly ? 'bg-slate-100 cursor-not-allowed' : ''}`}
-                />
-            </div>
-        );
+        const payload = { tanggal: selectedDate, records: records };
 
-        const Select = ({ label, options, ...props }) => (
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
-                <div className="relative">
-                <select 
-                    {...props}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700 appearance-none"
-                >
-                    <option value="">Pilih...</option>
-                    {options.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                </select>
-                <div className="absolute right-3 top-3 pointer-events-none text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
-                </div>
-            </div>
-        );
-
-        // --- Komponen Toast Notification ---
-        const Toast = ({ message, type, onClose }) => {
-            useEffect(() => {
-                const timer = setTimeout(() => {
-                    onClose();
-                }, 3000); 
-                return () => clearTimeout(timer);
-            }, [onClose]);
-
-            const styles = {
-                success: { bg: 'bg-emerald-600', icon: CheckCircle },
-                error: { bg: 'bg-red-500', icon: AlertCircle },
-                info: { bg: 'bg-blue-500', icon: Info },
-            };
-
-            const Style = styles[type] || styles.info;
-            const Icon = Style.icon;
-
-            return (
-                <div className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-white ${Style.bg} animate-bounce-in`}>
-                    <Icon className="w-5 h-5" />
-                    <span className="font-medium text-sm">{message}</span>
-                    <button onClick={onClose} className="ml-2 hover:opacity-75"><X className="w-4 h-4" /></button>
-                </div>
-            );
-        };
-
-        // --- Helper Warna Hex untuk Diagram Lingkaran ---
-        const getHexColor = (className) => {
-            const map = {
-                'bg-emerald-500': '#10b981',
-                'bg-amber-400': '#fbbf24',
-                'bg-rose-500': '#f43f5e',
-                'bg-slate-400': '#94a3b8',
-                'bg-slate-200': '#e2e8f0'
-            };
-            return map[className] || '#cbd5e1';
-        };
-
-        const ChartCard = ({ title, stats }) => {
-            const totalCount = stats.reduce((a, b) => a + b.count, 0);
-            let cumulativePercent = 0;
-            
-            const gradientParts = stats.map(stat => {
-                const color = getHexColor(stat.color);
-                const start = cumulativePercent;
-                const exactPercent = totalCount > 0 ? (stat.count / totalCount) * 100 : 0;
-                cumulativePercent += exactPercent;
-                return `${color} ${start}% ${cumulativePercent}%`;
+        try {
+            const response = await fetch(`${apiUrl}?action=submitAbsensi`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
             });
+            const result = await response.json();
+            if (result.status === 'success') {
+                alert('Absensi berhasil disimpan!');
+                setStatusMap({});
+                setKetMap({});
+                fetchData();
+            } else {
+                alert('Gagal: ' + result.message);
+            }
+        } catch (e) { alert('Error koneksi.'); }
+        setIsSubmitting(false);
+    };
 
-            const hasData = totalCount > 0;
-            const gradientStyle = hasData ? `conic-gradient(${gradientParts.join(', ')})` : '#f1f5f9';
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <h2 className="text-2xl font-bold text-white">Input Absensi Harian</h2>
+              <div className="flex gap-3">
+                  <div className="bg-white/5 p-1 rounded-lg border border-white/10">
+                      <select 
+                        value={selectedShift}
+                        onChange={(e) => setSelectedShift(e.target.value)}
+                        className="bg-transparent text-white px-3 py-1 outline-none font-medium cursor-pointer"
+                      >
+                          <option value="Pagi" className="bg-[#1a1a2e]">Shift Pagi</option>
+                          <option value="Sore" className="bg-[#1a1a2e]">Shift Sore</option>
+                      </select>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
+                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-transparent text-white px-3 py-1 outline-none"/>
+                  </div>
+              </div>
+          </div>
+          
+          <div className="bg-indigo-900/30 border border-indigo-500/30 p-3 rounded-lg flex items-center gap-3 text-sm text-indigo-200">
+             <Clock size={16} />
+             <span>
+               Menampilkan <b>{selectedShift === 'Pagi' ? 'Pengurus Reguler' : 'Petugas Jadwal Sore'}</b> yang belum absen tanggal <b>{selectedDate}</b>.
+             </span>
+          </div>
+        </div>
 
-            return (
-                <Card className="p-5 flex flex-col h-full">
-                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
-                        <PieChart className="w-4 h-4 text-emerald-600" />
-                        <h4 className="font-bold text-slate-800 text-sm">{title}</h4>
-                    </div>
-                    
-                    <div className="flex flex-col items-center flex-1 justify-center">
-                        <div className="relative w-32 h-32 rounded-full mb-6 shadow-inner transition-all duration-500" 
-                             style={{ background: gradientStyle }}>
-                             <div className="absolute inset-8 bg-white rounded-full flex items-center justify-center shadow-sm">
-                                <div className="text-center">
-                                    <span className="text-xs font-semibold text-slate-400 block">Total</span>
-                                    <span className="text-lg font-bold text-slate-700">{totalCount}</span>
-                                </div>
-                             </div>
-                        </div>
-                        <div className="w-full space-y-2">
-                            {stats.map((stat, idx) => (
-                                <div key={idx} className="flex items-center justify-between text-xs">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-2.5 h-2.5 rounded-full ${stat.color}`}></div>
-                                        <span className="text-slate-600 font-medium truncate max-w-[100px]" title={stat.label}>{stat.label}</span>
-                                    </div>
-                                    <span className="text-slate-500 font-mono bg-slate-50 px-1.5 py-0.5 rounded">{stat.count} ({stat.percentage}%)</span>
-                                </div>
+        {isTodayFriday || isTodayLibur ? (
+           <div className="p-8 text-center border-2 border-dashed border-white/10 rounded-2xl bg-white/5">
+             <Coffee className="mx-auto text-yellow-400 mb-4" size={48} />
+             <h3 className="text-xl font-bold text-white">Hari Ini Libur</h3>
+             <p className="text-gray-400 mt-2">{isTodayFriday ? "Hari Jum'at" : "Tanggal Merah Tercatat"}. Absensi ditiadakan.</p>
+           </div>
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-black/20 text-indigo-200">
+                  <tr>
+                    <th className="p-4">Nama Pengurus</th>
+                    <th className="p-4 text-center">Kehadiran</th>
+                    <th className="p-4">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10 text-gray-300">
+                  {pendingPengurus.length > 0 ? pendingPengurus.map((p, idx) => (
+                    <tr key={`${p.niup}-${idx}`} className="hover:bg-white/5 transition-colors">
+                      <td className="p-4">
+                        <div className="font-medium text-white">{p.nama}</div>
+                        <div className="text-xs text-gray-500">{p.jabatan}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex justify-center gap-4">
+                            {['Hadir', 'Sakit', 'Izin', 'Alpha'].map((status) => (
+                                <label key={status} className="flex flex-col items-center cursor-pointer group">
+                                    <input 
+                                    type="radio" 
+                                    name={`status-${p.niup}`} 
+                                    onChange={() => handleAbsenChange(p.niup, status)}
+                                    checked={statusMap[p.niup] === status}
+                                    className={`w-5 h-5 appearance-none rounded-full border-2 border-white/20 checked:border-transparent transition-all mb-1
+                                        ${status === 'Hadir' ? 'checked:bg-emerald-500' : ''}
+                                        ${status === 'Sakit' ? 'checked:bg-yellow-500' : ''}
+                                        ${status === 'Izin' ? 'checked:bg-blue-500' : ''}
+                                        ${status === 'Alpha' ? 'checked:bg-red-500' : ''}
+                                    `}
+                                    />
+                                    <span className={`text-[10px] group-hover:text-white transition-colors ${statusMap[p.niup] === status ? 'text-white font-bold' : 'text-gray-500'}`}>{status}</span>
+                                </label>
                             ))}
                         </div>
-                    </div>
-                </Card>
-            );
+                      </td>
+                      <td className="p-4">
+                        <input 
+                            type="text" 
+                            placeholder="Catatan (Opsional)..." 
+                            value={ketMap[p.niup] || ''}
+                            onChange={(e) => handleKetChange(p.niup, e.target.value)}
+                            className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white w-full focus:border-indigo-500 outline-none transition-colors" 
+                        />
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                        <td colSpan="3" className="p-12 text-center text-gray-400">
+                            <CheckCircle2 size={48} className="mx-auto text-emerald-500/50 mb-3"/>
+                            <p className="font-medium text-white">
+                                {selectedShift === 'Sore' ? 'Tidak ada petugas sore yang belum absen.' : 'Semua pengurus reguler sudah diabsen!'}
+                            </p>
+                            {selectedShift === 'Sore' && <p className="text-xs mt-1">Pastikan jadwal sore sudah diisi di menu Kantor Sore.</p>}
+                        </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {pendingPengurus.length > 0 && (
+                <div className="p-4 border-t border-white/10 flex justify-end">
+                <button 
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
+                    {isSubmitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18} />} 
+                    {isSubmitting ? 'Menyimpan...' : 'Simpan Absensi'}
+                </button>
+                </div>
+            )}
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  const RekapView = () => {
+    const [filterTahun, setFilterTahun] = useState(new Date().getFullYear());
+    const [filterBulan, setFilterBulan] = useState(new Date().getMonth());
+    const [filterShift, setFilterShift] = useState('Pagi');
+    const [filterTanggal, setFilterTanggal] = useState('');
+    
+    const [editData, setEditData] = useState(null);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+    const filteredRaw = useMemo(() => {
+        return absensi.filter(item => {
+            const date = new Date(item.tanggal);
+            const itemYear = date.getFullYear();
+            const itemMonth = date.getMonth();
+            const itemDateStr = item.tanggal; 
+
+            if (item.shift !== filterShift) return false;
+
+            if (filterTanggal) {
+                return itemDateStr === filterTanggal;
+            }
+
+            let match = itemYear === parseInt(filterTahun) && itemMonth === parseInt(filterBulan);
+            return match;
+        });
+    }, [absensi, filterTahun, filterBulan, filterShift, filterTanggal]);
+
+    const uniqueDates = useMemo(() => {
+        const dates = new Set(filteredRaw.map(item => item.tanggal));
+        return Array.from(dates).sort();
+    }, [filteredRaw]);
+
+    const formatDateHeader = (dateStr) => {
+        const [y, m, d] = dateStr.split('-');
+        return `${d}/${m}`;
+    };
+
+    const handleCellClick = (p, dateStr) => {
+        const record = filteredRaw.find(r => r.niup === p.niup && r.tanggal === dateStr);
+        setEditData({
+            niup: p.niup,
+            nama: p.nama,
+            tanggal: dateStr,
+            shift: filterShift,
+            status: record ? record.status : 'Alpha',
+            keterangan: record ? (record.keterangan || '') : ''
+        });
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editData) return;
+        setIsSavingEdit(true);
+        const payload = {
+            tanggal: editData.tanggal,
+            records: [{
+                niup: editData.niup,
+                nama: editData.nama,
+                status: editData.status,
+                shift: editData.shift,
+                keterangan: editData.keterangan
+            }]
         };
 
-        const AverageCard = ({ title, data }) => (
-            <Card className="p-5">
-                <h4 className="font-bold text-slate-800 text-sm mb-4 border-b border-slate-100 pb-2">{title}</h4>
-                <div className="space-y-3">
-                    {data.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600 font-medium">{item.label}</span>
-                            <div className="flex items-center gap-2">
-                                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div 
-                                        className="h-full bg-emerald-500 rounded-full" 
-                                        style={{ width: `${Math.min(100, (item.value / 100) * 100)}%` }} 
-                                    ></div>
-                                </div>
-                                <span className="text-sm font-bold text-emerald-600 w-8 text-right">{item.value}</span>
-                            </div>
-                        </div>
-                    ))}
-                    {data.length === 0 && <p className="text-xs text-slate-400 italic">Tidak ada data</p>}
+        try {
+            const response = await fetch(`${apiUrl}?action=submitAbsensi`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            await response.json();
+            alert('Data berhasil diperbarui!');
+            fetchData();
+            setEditData(null);
+        } catch(e) { alert('Gagal update data'); }
+        setIsSavingEdit(false);
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+             <div className="bg-gradient-to-r from-blue-900/50 to-cyan-900/50 p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                        <FileText className="text-cyan-300" /> Rekapitulasi Absensi
+                    </h2>
+                    <p className="text-cyan-200 text-sm">Klik pada kotak status untuk mengedit data.</p>
+                </div>
+                <button className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition-all">
+                    <Download size={16} /> Export CSV
+                </button>
+            </div>
+
+            <Card className="p-4">
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full">
+                        <label className="text-xs text-gray-400 mb-1 block">Shift</label>
+                        <select 
+                            value={filterShift}
+                            onChange={(e) => setFilterShift(e.target.value)}
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+                        >
+                            <option value="Pagi">Pagi</option>
+                            <option value="Sore">Sore</option>
+                        </select>
+                    </div>
+                    <div className="flex-1 w-full">
+                        <label className="text-xs text-gray-400 mb-1 block">Bulan</label>
+                        <select 
+                            value={filterBulan}
+                            onChange={(e) => setFilterBulan(e.target.value)}
+                            disabled={!!filterTanggal}
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm disabled:opacity-50"
+                        >
+                            {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((m, i) => (
+                                <option key={i} value={i}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex-1 w-full">
+                        <label className="text-xs text-gray-400 mb-1 block">Tahun</label>
+                        <select 
+                            value={filterTahun}
+                            onChange={(e) => setFilterTahun(e.target.value)}
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+                        >
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                        </select>
+                    </div>
                 </div>
             </Card>
-        );
 
-        const LoadingScreen = () => (
-            <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center animate-fade-in">
-                <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 animate-bounce">
-                    <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto custom-scrollbar pb-2">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-black/20 text-cyan-200">
+                            <tr>
+                                <th className="p-4 border-b border-white/10 sticky left-0 bg-[#16162c] z-10 w-48 shadow-lg border-r">Nama Pengurus</th>
+                                {uniqueDates.length > 0 ? uniqueDates.map(dateStr => (
+                                    <th key={dateStr} className="p-2 text-center text-xs border-b border-white/10 min-w-[60px] whitespace-nowrap">
+                                        {formatDateHeader(dateStr)}
+                                    </th>
+                                )) : (
+                                    <th className="p-4 border-b border-white/10 text-gray-500 italic font-normal">Belum ada data</th>
+                                )}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10 text-gray-300">
+                            {pengurus.length > 0 ? pengurus.map((p, idx) => (
+                                <tr key={`${p.niup}-${idx}`} className="hover:bg-white/5">
+                                    <td className="p-4 border-b border-white/10 sticky left-0 bg-[#16162c] z-10 border-r shadow-lg font-medium text-white truncate max-w-[200px]">
+                                        {p.nama}
+                                    </td>
+                                    {uniqueDates.length > 0 ? uniqueDates.map(dateStr => {
+                                        const record = filteredRaw.find(r => r.niup === p.niup && r.tanggal === dateStr);
+                                        const status = record ? record.status : 'Alpha'; 
+                                        return (
+                                            <td 
+                                                key={dateStr} 
+                                                onClick={() => handleCellClick(p, dateStr)}
+                                                className="p-2 border-b border-white/10 text-center cursor-pointer hover:bg-white/10 transition-colors"
+                                                title="Klik untuk edit"
+                                            >
+                                                <Badge status={status} mini={true} />
+                                            </td>
+                                        );
+                                    }) : (
+                                        <td className="p-4 border-b border-white/10"></td>
+                                    )}
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={uniqueDates.length + 1} className="p-8 text-center text-gray-500">
+                                        Data pengurus kosong.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800">Memuat Data...</h2>
-                <p className="text-slate-500 text-sm mt-2">Mohon tunggu sebentar</p>
-            </div>
-        );
+            </Card>
 
-        // --- Main App Component ---
-
-        function App() {
-            const [view, setView] = useState('dashboard');
-            const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-            
-            const [webAppUrl, setWebAppUrl] = useState('https://script.google.com/macros/s/AKfycbwTdH0n0IPEFMKrIpflNzxxwIH8vL6evXGtbefzN66X15bnJVgmOkPhmMIoWujjHiyn/exec');
-            const [loading, setLoading] = useState(false);
-            const [connectionStatus, setConnectionStatus] = useState('idle');
-            const [initialLoadDone, setInitialLoadDone] = useState(false);
-            const [notification, setNotification] = useState(null); 
-            
-            const [santriData, setSantriData] = useState([]);
-            const [barangData, setBarangData] = useState([]);
-            
-            const [ownershipTab, setOwnershipTab] = useState('missing');
-
-            const [showSantriModal, setShowSantriModal] = useState(false);
-            const [showBarangModal, setShowBarangModal] = useState(false);
-            const [editBarangData, setEditBarangData] = useState(null);
-            const [editSantriData, setEditSantriData] = useState(null);
-
-            const navItems = [
-                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                { id: 'santri', label: 'Data Santri', icon: Users },
-                { id: 'barang', label: 'Kepemilikan', icon: BookOpen },
-                { id: 'settings', label: 'Pengaturan', icon: Settings },
-            ];
-
-            const showToast = (message, type = 'success') => {
-                setNotification({ message, type });
-            };
-
-            // --- Fungsi Parse Angka yang Kuat (Robust) ---
-            const robustParseFloat = (val) => {
-                if (val === undefined || val === null || val === '') return 0;
-                if (typeof val === 'number') return val;
-                // Ganti koma dengan titik, hapus karakter aneh
-                const str = String(val).replace(',', '.').replace(/[^0-9.-]/g, '');
-                const num = parseFloat(str);
-                return isFinite(num) ? num : 0;
-            };
-
-            // --- Hitung Rata-rata per Kelompok ---
-            const calculateGroupAverages = (data, groupKey) => {
-                const groups = {};
-                let hasData = false;
-                
-                data.forEach(item => {
-                    // Pastikan key ada, atau masuk kategori 'Lainnya'
-                    const key = item[groupKey] || 'Lainnya'; 
-                    // Gunakan fungsi robustParseFloat untuk rekapitulasi
-                    const val = robustParseFloat(item.rekapitulasi);
-                    
-                    if (!groups[key]) groups[key] = { sum: 0, count: 0 };
-                    groups[key].sum += val;
-                    groups[key].count += 1;
-                    hasData = true;
-                });
-
-                if (!hasData) return [];
-
-                return Object.entries(groups)
-                    .map(([label, { sum, count }]) => ({ label, value: (sum / count).toFixed(1) }))
-                    .sort((a, b) => b.value - a.value); // Urutkan dari nilai tertinggi
-            };
-
-            useEffect(() => {
-                const savedUrl = localStorage.getItem('pdk_webapp_url');
-                if (savedUrl) setWebAppUrl(savedUrl);
-            }, []);
-
-            useEffect(() => {
-                if (webAppUrl) fetchData(webAppUrl, false);
-            }, [webAppUrl]);
-
-            const testConnection = async () => {
-                setConnectionStatus('testing');
-                try {
-                    const response = await fetch(`${webAppUrl}?action=ping`);
-                    if (response.ok || response.type === 'opaque') {
-                        await fetchData(webAppUrl);
-                        setConnectionStatus('success');
-                        showToast("Koneksi Berhasil! Aplikasi terhubung.", "success");
-                    } else {
-                        throw new Error("Response status not OK");
-                    }
-                } catch (error) {
-                    console.error("Connection Error:", error);
-                    setConnectionStatus('error');
-                    showToast("Koneksi Gagal. Cek URL Pengaturan.", "error");
-                }
-            };
-
-            const fetchData = async (urlToUse, silent = false) => {
-                const url = urlToUse || webAppUrl;
-                if (!url) return;
-                
-                if(!silent) setLoading(true);
-                try {
-                    const response = await fetch(`${url}?action=getData`); 
-                    if (!response.ok) throw new Error("Network response was not ok");
-                    
-                    const data = await response.json();
-                    
-                    if(data.santri && Array.isArray(data.santri)) setSantriData(data.santri);
-                    if(data.barang && Array.isArray(data.barang)) setBarangData(data.barang);
-                    
-                    if(!silent) console.log("Data berhasil diambil:", data);
-                } catch (error) {
-                    if(!silent) console.error("Gagal mengambil data:", error);
-                } finally {
-                    if(!silent) setLoading(false);
-                    setInitialLoadDone(true);
-                }
-            };
-
-            const saveDataToSheet = async (type, data) => {
-                if (!webAppUrl) {
-                    showToast("URL Web App belum diatur!", "error");
-                    return;
-                }
-
-                setLoading(true);
-                try {
-                    await fetch(webAppUrl, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type, data })
-                    });
-                    
-                    if(type === 'santri') {
-                        const exists = santriData.some(s => s.niup === data.niup);
-                        if (exists) {
-                            const updated = santriData.map(s => s.niup === data.niup ? data : s);
-                            setSantriData(updated);
-                        } else {
-                            setSantriData([...santriData, data]);
-                        }
-                        showToast("Berhasil Menyimpan Data Santri", "success");
-                    }
-                    if(type === 'barang') {
-                        const filtered = barangData.filter(b => b.niup !== data.niup);
-                        setBarangData([...filtered, data]);
-                        showToast("Berhasil Menyimpan Data Kepemilikan", "success");
-                    }
-                    
-                } catch (error) {
-                    console.error(error);
-                    showToast("Gagal menyimpan data. Cek koneksi.", "error");
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const getChartColor = (label) => {
-                const l = label ? label.toLowerCase() : '';
-                if (['ya', 'baik', 'lengkap', 'rapi', 'ada', 'berurutan'].includes(l)) return 'bg-emerald-500';
-                if (['cukup'].includes(l)) return 'bg-amber-400';
-                if (['tidak', 'rusak', 'kurang'].includes(l)) return 'bg-rose-500';
-                return 'bg-slate-400';
-            };
-
-            const calculateAspectStats = (data, key, options) => {
-                const total = data.length;
-                if (total === 0) return options.map(opt => ({ label: opt, count: 0, percentage: 0, color: 'bg-slate-200' }));
-                
-                return options.map(opt => {
-                    const count = data.filter(item => item[key] === opt).length;
-                    return {
-                        label: opt,
-                        count: count,
-                        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
-                        color: getChartColor(opt)
-                    };
-                });
-            };
-
-            const analysisAspects = [
-                { key: 'kepemilikan-kitab', label: 'Kepemilikan Kitab', options: ['Ya', 'Tidak'] },
-                { key: 'kelengkapan-kitab', label: 'Kelengkapan Kitab', options: ['Ya', 'Tidak'] },
-                { key: 'kondisi-kitab', label: 'Kondisi Fisik', options: ['Baik', 'Cukup', 'Rusak'] },
-                { key: 'makna-kitab', label: 'Kelengkapan Makna', options: ['Lengkap', 'Cukup', 'Tidak'] },
-                { key: 'ketepatan-makna', label: 'Ketepatan Makna', options: ['Baik', 'Cukup', 'Kurang'] },
-                { key: 'kerapian-makna', label: 'Kerapian Makna', options: ['Rapi', 'Cukup', 'Tidak'] },
-                { key: 'catatan-kitab', label: 'Keberadaan Catatan', options: ['Ada', 'Tidak'] },
-                { key: 'kualitas-catatan', label: 'Kualitas Catatan', options: ['Baik', 'Cukup', 'Kurang'] },
-                { key: 'kerapian-catatan', label: 'Kerapian Catatan', options: ['Rapi', 'Cukup', 'Tidak'] },
-                { key: 'keberlanjutan-catatan', label: 'Keberlanjutan', options: ['Berurutan', 'Tidak'] },
-                { key: 'kesimpulan-akhir', label: 'Kesimpulan Akhir', options: ['Baik', 'Cukup', 'Kurang'] },
-            ];
-
-            const getMergedBarangData = () => {
-                return barangData.map(barang => {
-                    const santri = santriData.find(s => s.niup === barang.niup);
-                    if (santri) {
-                        return {
-                            ...barang,
-                            nama: santri.nama,
-                            kamar: santri.kamar,
-                            daerah: santri.daerah,
-                            wilayah: santri.wilayah,
-                            pendidikan: santri.pendidikan,
-                            jurusan: santri.jurusan,
-                            kelas: santri.kelas,
-                            jenjang: santri.jenjang,
-                            'majelis-pagi': santri['majelis-pagi'],
-                            'majelis-sore': santri['majelis-sore'],
-                            'majelis-kamis-pagi': santri['majelis-kamis-pagi'],
-                            'majelis-kamis-sore': santri['majelis-kamis-sore']
-                        };
-                    }
-                    return barang;
-                });
-            };
-
-            const Dashboard = () => {
-                const [showFilters, setShowFilters] = useState(false);
-                const [activeFilters, setActiveFilters] = useState({
-                    kamar: '', daerah: '', wilayah: '', pendidikan: '',
-                    jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
-                });
-
-                const getUniqueOptions = (key) => {
-                    const values = santriData.map(item => item[key]).filter(val => val !== undefined && val !== '');
-                    return [...new Set(values)].sort();
-                };
-
-                const handleFilterChange = (key, value) => {
-                    setActiveFilters(prev => ({ ...prev, [key]: value }));
-                };
-                
-                const clearFilters = () => {
-                    setActiveFilters({
-                        kamar: '', daerah: '', wilayah: '', pendidikan: '',
-                        jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
-                    });
-                };
-
-                const filterData = (dataToFilter) => {
-                    return dataToFilter.filter(item => {
-                        return Object.entries(activeFilters).every(([key, value]) => {
-                            if (!value) return true;
-                            return String(item[key]) === String(value);
-                        });
-                    });
-                };
-
-                const mergedData = getMergedBarangData();
-                const filteredSantri = filterData(santriData);
-                const filteredBarang = filterData(mergedData);
-
-                // --- KALKULASI RATA-RATA ---
-                // Menggunakan robustParseFloat untuk memastikan angka terbaca meski ada koma atau format text
-                const validScores = filteredBarang
-                    .map(item => robustParseFloat(item.rekapitulasi));
-                
-                const overallAvg = validScores.length > 0 
-                    ? (validScores.reduce((sum, val) => sum + val, 0) / validScores.length).toFixed(1)
-                    : "0.0";
-
-                const avgWilayah = calculateGroupAverages(filteredBarang, 'wilayah');
-                const avgDaerah = calculateGroupAverages(filteredBarang, 'daerah');
-                const avgPendidikan = calculateGroupAverages(filteredBarang, 'pendidikan');
-                const avgMajelisPagi = calculateGroupAverages(filteredBarang, 'majelis-pagi');
-                const avgMajelisSore = calculateGroupAverages(filteredBarang, 'majelis-sore');
-
-                const stats = [
-                    { label: "Total Santri", value: filteredSantri.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-                    { label: "Data Kepemilikan", value: filteredBarang.length, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
-                    { label: "Belum Input", value: Math.max(0, filteredSantri.length - filteredBarang.length), icon: AlertCircle, color: "text-red-600", bg: "bg-red-50" },
-                    { label: "Predikat Baik", value: filteredBarang.filter(b => robustParseFloat(b.rekapitulasi) >= 80).length, icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
-                ];
-
-                return (
-                    <div className="space-y-6 animate-fade-in">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
-                                <p className="text-slate-500">Ringkasan data kepesantrenan terkini.</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
-                                    <Filter className="w-5 h-5"/> Filter
-                                </Button>
-                                <Button variant="secondary" onClick={() => fetchData(webAppUrl)} disabled={loading}>
-                                    {loading ? 'Memuat...' : 'Refresh Data'}
-                                </Button>
-                            </div>
+            <Modal isOpen={!!editData} onClose={() => setEditData(null)} title="Edit Data Absensi">
+                {editData && (
+                    <div className="space-y-4">
+                        <div className="bg-white/5 p-3 rounded-lg border border-white/10 text-sm space-y-1">
+                            <p className="text-gray-400">Nama: <span className="text-white font-bold">{editData.nama}</span></p>
+                            <p className="text-gray-400">Tanggal: <span className="text-white">{editData.tanggal}</span></p>
+                            <p className="text-gray-400">Shift: <span className="text-white">{editData.shift}</span></p>
                         </div>
-
-                        {showFilters && (
-                            <Card className="p-4 bg-slate-50 border-emerald-100 animate-fade-in">
-                                <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
-                                    <h4 className="font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4" /> Filter Data Dashboard</h4>
-                                    <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
-                                        <XCircle className="w-3 h-3" /> Reset Filter
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                    <Select label="Kamar" value={activeFilters.kamar} onChange={(e) => handleFilterChange('kamar', e.target.value)} options={getUniqueOptions('kamar')} />
-                                    <Select label="Daerah" value={activeFilters.daerah} onChange={(e) => handleFilterChange('daerah', e.target.value)} options={getUniqueOptions('daerah')} />
-                                    <Select label="Wilayah" value={activeFilters.wilayah} onChange={(e) => handleFilterChange('wilayah', e.target.value)} options={getUniqueOptions('wilayah')} />
-                                    <Select label="Pendidikan" value={activeFilters.pendidikan} onChange={(e) => handleFilterChange('pendidikan', e.target.value)} options={getUniqueOptions('pendidikan')} />
-                                    <Select label="Jurusan" value={activeFilters.jurusan} onChange={(e) => handleFilterChange('jurusan', e.target.value)} options={getUniqueOptions('jurusan')} />
-                                    <Select label="Kelas" value={activeFilters.kelas} onChange={(e) => handleFilterChange('kelas', e.target.value)} options={getUniqueOptions('kelas')} />
-                                    <Select label="Jenjang" value={activeFilters.jenjang} onChange={(e) => handleFilterChange('jenjang', e.target.value)} options={getUniqueOptions('jenjang')} />
-                                    <Select label="Majelis Pagi" value={activeFilters['majelis-pagi']} onChange={(e) => handleFilterChange('majelis-pagi', e.target.value)} options={getUniqueOptions('majelis-pagi')} />
-                                    <Select label="Majelis Sore" value={activeFilters['majelis-sore']} onChange={(e) => handleFilterChange('majelis-sore', e.target.value)} options={getUniqueOptions('majelis-sore')} />
-                                </div>
-                            </Card>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {stats.map((stat, idx) => (
-                                <Card key={idx} className="p-6 flex items-center gap-4">
-                                <div className={`p-4 rounded-xl ${stat.bg}`}>
-                                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                                    <h3 className="text-2xl font-bold text-slate-800">{stat.value}</h3>
-                                </div>
-                                </Card>
-                            ))}
-                        </div>
-
-                        {/* --- Statistics Rows (5 Baris sesuai permintaan) --- */}
                         
-                        {/* Baris 1: Nilai Rata-rata Keseluruhan */}
-                        <Card className="p-6 bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-600 text-white flex items-center justify-between shadow-xl shadow-teal-500/30 border-none relative overflow-hidden">
-                            <div className="relative z-10">
-                                <h3 className="text-xl font-bold text-white mb-1">Nilai Rata-rata Keseluruhan</h3>
-                                <p className="text-xs text-white/80">Dihitung dari {filteredBarang.length} santri yang sudah dinilai</p>
-                            </div>
-                            <div className="text-6xl font-black tracking-tighter relative z-10">{overallAvg}</div>
-                            
-                            {/* Decorative background shapes */}
-                            <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                            <div className="absolute top-0 right-1/4 w-24 h-24 bg-teal-400/20 rounded-full blur-xl"></div>
-                        </Card>
-
-                        {/* Baris 2: Rata-rata per Wilayah */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <AverageCard title="Rata-rata Nilai per Wilayah" data={avgWilayah} />
-                            
-                            {/* Baris 3: Rata-rata per Daerah */}
-                            <AverageCard title="Rata-rata Nilai per Daerah" data={avgDaerah} />
-                        </div>
-
-                        {/* Baris 4: Rata-rata per Majelis */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <AverageCard title="Rata-rata Majelis Pagi" data={avgMajelisPagi} />
-                            <AverageCard title="Rata-rata Majelis Sore" data={avgMajelisSore} />
-                        </div>
-
-                        {/* Baris 5: Rata-rata per Pendidikan */}
-                        <AverageCard title="Rata-rata Nilai per Pendidikan" data={avgPendidikan} />
-
                         <div>
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                <Activity className="w-5 h-5 text-emerald-600" />
-                                Analisis Per Aspek
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {analysisAspects.map((aspect) => (
-                                    <ChartCard 
-                                        key={aspect.key}
-                                        title={aspect.label}
-                                        stats={calculateAspectStats(filteredBarang, aspect.key, aspect.options)}
-                                    />
+                            <label className="text-xs text-gray-400 mb-2 block">Status Kehadiran</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {['Hadir', 'Sakit', 'Izin', 'Alpha'].map(s => (
+                                    <button
+                                        key={s}
+                                        onClick={() => setEditData({...editData, status: s})}
+                                        className={`py-2 rounded-lg text-sm border transition-all ${editData.status === s 
+                                            ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' 
+                                            : 'bg-white/5 border-transparent text-gray-400 hover:bg-white/10'}`}
+                                    >
+                                        {s}
+                                    </button>
                                 ))}
                             </div>
                         </div>
-                    </div>
-                );
-            };
 
-            const SantriForm = ({ onClose, initialData = null }) => {
-                const defaultData = {
-                    'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '', 
-                    'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
-                    'majelis-pagi': '', 'majelis-sore': '', 'majelis-kamis-pagi': '', 'majelis-kamis-sore': ''
-                };
-
-                const [formData, setFormData] = useState(defaultData);
-
-                useEffect(() => {
-                    if (initialData) {
-                        setFormData(prev => ({ ...prev, ...initialData }));
-                    }
-                }, [initialData]);
-
-                const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
-
-                const handleSubmit = (e) => {
-                    e.preventDefault();
-                    saveDataToSheet('santri', formData);
-                    onClose();
-                };
-
-                const isEditMode = !!initialData;
-
-                return (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 animate-scale-up">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">{isEditMode ? 'Detail & Edit Data Santri' : 'Tambah Data Santri'}</h3>
-                            <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600" /></button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            <Input name="niup" label="NIUP" required onChange={handleChange} value={formData.niup} readOnly={isEditMode} />
-                            <Input name="nama" label="Nama Lengkap" required onChange={handleChange} value={formData.nama} />
-                            <Input name="kamar" label="Kamar" onChange={handleChange} value={formData.kamar} />
-                            <Input name="daerah" label="Daerah" onChange={handleChange} value={formData.daerah} />
-                            <Input name="wilayah" label="Wilayah" onChange={handleChange} value={formData.wilayah} />
-                            <Input name="pendidikan" label="Pendidikan Formal" onChange={handleChange} value={formData.pendidikan} />
-                            <Input name="jurusan" label="Jurusan" onChange={handleChange} value={formData.jurusan} />
-                            <Input name="kelas" label="Kelas" onChange={handleChange} value={formData.kelas} />
-                            <Input name="jenjang" label="Jenjang" onChange={handleChange} value={formData.jenjang} />
-                            
-                            <div className="col-span-full border-t border-slate-100 pt-4 mt-2">
-                                <h4 className="text-sm font-bold text-emerald-600 mb-4 uppercase tracking-wide">Data Majelis</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <Input name="majelis-pagi" label="Majelis Pagi" onChange={handleChange} value={formData['majelis-pagi']} />
-                                    <Input name="majelis-sore" label="Majelis Sore" onChange={handleChange} value={formData['majelis-sore']} />
-                                    <Input name="majelis-kamis-pagi" label="Majelis Kamis Pagi" onChange={handleChange} value={formData['majelis-kamis-pagi']} />
-                                    <Input name="majelis-kamis-sore" label="Majelis Kamis Sore" onChange={handleChange} value={formData['majelis-kamis-sore']} />
-                                </div>
-                            </div>
-
-                            <div className="col-span-full flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                                <Button variant="secondary" onClick={onClose}>Batal</Button>
-                                <Button type="submit" disabled={loading}>{loading ? 'Menyimpan...' : (isEditMode ? 'Simpan Perubahan' : 'Simpan Data')}</Button>
-                            </div>
-                        </form>
-                        </Card>
-                    </div>
-                );
-            };
-
-            const BarangForm = ({ onClose, initialData = null }) => {
-                const defaultData = {
-                    'niup': '', 'nama': '', 'kamar': '', 'daerah': '', 'wilayah': '',
-                    'pendidikan': '', 'jurusan': '', 'kelas': '', 'jenjang': '', 
-                    'majelis-pagi': '', 'majelis-sore': '', 'majelis-kamis-pagi': '', 'majelis-kamis-sore': '',
-                    'kepemilikan-kitab': 'Tidak', 'kelengkapan-kitab': 'Tidak', 'kondisi-kitab': 'Rusak', 
-                    'makna-kitab': 'Tidak', 'ketepatan-makna': 'Kurang', 'kerapian-makna': 'Tidak',
-                    'catatan-kitab': 'Tidak', 'kualitas-catatan': 'Kurang', 'kerapian-catatan': 'Tidak',
-                    'keberlanjutan-catatan': 'Tidak', 'kesimpulan-akhir': 'Kurang', 'keterangan': '', 'rekapitulasi': 0
-                };
-
-                const [formData, setFormData] = useState(defaultData);
-
-                useEffect(() => {
-                    if (initialData) {
-                        setFormData(prev => ({ ...prev, ...initialData }));
-                    }
-                }, [initialData]);
-
-                useEffect(() => {
-                    let score = 0;
-                    if (formData['kepemilikan-kitab'] === 'Ya') score += 10;
-                    if (formData['kelengkapan-kitab'] === 'Ya') score += 10;
-                    if (formData['kondisi-kitab'] === 'Baik') score += 10; else if (formData['kondisi-kitab'] === 'Cukup') score += 5;
-                    if (formData['makna-kitab'] === 'Lengkap') score += 10; else if (formData['makna-kitab'] === 'Cukup') score += 5;
-                    if (formData['ketepatan-makna'] === 'Baik') score += 10; else if (formData['ketepatan-makna'] === 'Cukup') score += 5;
-                    if (formData['kerapian-makna'] === 'Rapi') score += 10; else if (formData['kerapian-makna'] === 'Cukup') score += 5;
-                    if (formData['catatan-kitab'] === 'Ada') score += 10;
-                    if (formData['kualitas-catatan'] === 'Baik') score += 10; else if (formData['kualitas-catatan'] === 'Cukup') score += 5;
-                    if (formData['kerapian-catatan'] === 'Rapi') score += 5; else if (formData['kerapian-catatan'] === 'Cukup') score += 2.5;
-                    if (formData['keberlanjutan-catatan'] === 'Berurutan') score += 5;
-                    if (formData['kesimpulan-akhir'] === 'Baik') score += 10; else if (formData['kesimpulan-akhir'] === 'Cukup') score += 5;
-
-                    setFormData(prev => ({ ...prev, rekapitulasi: score }));
-                }, [
-                    formData['kepemilikan-kitab'], formData['kelengkapan-kitab'], formData['kondisi-kitab'], 
-                    formData['makna-kitab'], formData['ketepatan-makna'], formData['kerapian-makna'], 
-                    formData['catatan-kitab'], formData['kualitas-catatan'], formData['kerapian-catatan'], 
-                    formData['keberlanjutan-catatan'], formData['kesimpulan-akhir']
-                ]);
-
-                const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
-
-                const handleSubmit = (e) => {
-                    e.preventDefault();
-                    saveDataToSheet('barang', formData);
-                    onClose();
-                };
-
-                const isEditMode = initialData && initialData.rekapitulasi !== undefined;
-
-                return (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 animate-scale-up">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800">{isEditMode ? 'Edit Penilaian' : 'Input Penilaian Baru'}</h3>
-                                <p className="text-sm text-slate-500">{formData.nama} - {formData.niup}</p>
-                            </div>
-                            <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600" /></button>
-                        </div>
-                        <form onSubmit={handleSubmit}>
-                            <div className="bg-slate-50 p-4 rounded-xl mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                                <div className="lg:col-span-1">
-                                    <Input name="niup" label="NIUP Santri" required onChange={handleChange} value={formData.niup} readOnly={true} className="bg-slate-100" />
-                                </div>
-                                <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <Input name="nama" label="Nama" value={formData.nama} readOnly className="bg-slate-100" />
-                                    <Input name="kamar" label="Kamar" value={formData.kamar} readOnly className="bg-slate-100" />
-                                    <Input name="daerah" label="Daerah" value={formData.daerah} readOnly className="bg-slate-100" />
-                                    <Input name="wilayah" label="Wilayah" value={formData.wilayah} readOnly className="bg-slate-100" />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kitab Pegangan Santri</h4>
-                                    <Select name="kepemilikan-kitab" label="Kepemilikan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kepemilikan-kitab']}/>
-                                    <Select name="kelengkapan-kitab" label="Kelengkapan Kitab" options={['Ya', 'Tidak']} onChange={handleChange} value={formData['kelengkapan-kitab']}/>
-                                    <Select name="kondisi-kitab" label="Kondisi Fisik" options={['Baik', 'Cukup', 'Rusak']} onChange={handleChange} value={formData['kondisi-kitab']}/>
-                                </div>
-                                <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Kualitas Makna Kitab</h4>
-                                    <Select name="makna-kitab" label="Kelengkapan Makna" options={['Lengkap', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['makna-kitab']}/>
-                                    <Select name="ketepatan-makna" label="Ketepatan Makna" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['ketepatan-makna']}/>
-                                    <Select name="kerapian-makna" label="Kerapian Makna" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-makna']}/>
-                                </div>
-                                <div className="space-y-4">
-                                    <h4 className="font-bold text-emerald-600 border-b pb-2">Catatan dan Resume Kitab</h4>
-                                    <Select name="catatan-kitab" label="Keberadaan Catatan" options={['Ada', 'Tidak']} onChange={handleChange} value={formData['catatan-kitab']}/>
-                                    <Select name="kualitas-catatan" label="Kualitas Catatan" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kualitas-catatan']}/>
-                                    <Select name="kerapian-catatan" label="Kerapian Catatan" options={['Rapi', 'Cukup', 'Tidak']} onChange={handleChange} value={formData['kerapian-catatan']}/>
-                                    <Select name="keberlanjutan-catatan" label="Keberlanjutan" options={['Berurutan', 'Tidak']} onChange={handleChange} value={formData['keberlanjutan-catatan']}/>
-                                    <Select name="kesimpulan-akhir" label="Kesimpulan Akhir" options={['Baik', 'Cukup', 'Kurang']} onChange={handleChange} value={formData['kesimpulan-akhir']}/>
-                                </div>
-                            </div>
-
-                            <div className="mt-6">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Keterangan</label>
-                                <textarea 
-                                    name="keterangan" 
-                                    value={formData['keterangan'] || ''} 
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-700"
-                                    rows="3"
-                                    placeholder="Tulis keterangan atau catatan tambahan di sini..."
-                                ></textarea>
-                            </div>
-                            
-                            <div className="mt-8 flex items-center justify-between bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                                <div>
-                                    <span className="text-emerald-800 font-bold block text-sm uppercase">Rekapitulasi Nilai</span>
-                                    <span className="text-xs text-emerald-600">Dihitung otomatis berdasarkan kriteria</span>
-                                </div>
-                                <div className="text-4xl font-black text-emerald-600">{formData.rekapitulasi}</div>
-                            </div>
-
-                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                                <Button variant="secondary" onClick={onClose}>Batal</Button>
-                                <Button type="submit" disabled={loading}>{loading ? 'Menyimpan...' : 'Simpan Penilaian'}</Button>
-                            </div>
-                        </form>
-                        </Card>
-                    </div>
-                );
-            };
-
-            const TableView = ({ title, columns, data, onAdd, extraHeader, onRowDoubleClick }) => {
-                const [searchTerm, setSearchTerm] = useState('');
-                const [showFilters, setShowFilters] = useState(false);
-                const [activeFilters, setActiveFilters] = useState({
-                    kamar: '', daerah: '', wilayah: '', pendidikan: '',
-                    jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
-                });
-
-                const getUniqueOptions = (key) => {
-                    const values = data.map(item => item[key]).filter(val => val !== undefined && val !== '');
-                    return [...new Set(values)].sort();
-                };
-
-                const handleFilterChange = (key, value) => {
-                    setActiveFilters(prev => ({ ...prev, [key]: value }));
-                };
-                
-                const clearFilters = () => {
-                    setActiveFilters({
-                        kamar: '', daerah: '', wilayah: '', pendidikan: '',
-                        jurusan: '', kelas: '', jenjang: '', 'majelis-pagi': '', 'majelis-sore': ''
-                    });
-                };
-
-                const filteredData = data.filter(item => {
-                    const matchesSearch = Object.values(item).some(val => 
-                        String(val).toLowerCase().includes(searchTerm.toLowerCase())
-                    );
-                    const matchesFilters = Object.entries(activeFilters).every(([key, value]) => {
-                        if (!value) return true; 
-                        return String(item[key]) === String(value);
-                    });
-                    return matchesSearch && matchesFilters;
-                });
-
-                return (
-                    <div className="space-y-6 animate-fade-in">
-                        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                    {title}
-                                    <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">{filteredData.length}</span>
-                                </h2>
-                                <p className="text-slate-500">Kelola database {title.toLowerCase()} disini.</p>
-                            </div>
-                            <div className="flex gap-3">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Cari data..." 
-                                        className="pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-full md:w-64"
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                                <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
-                                    <Filter className="w-5 h-5"/> Filter
-                                </Button>
-                                {onAdd && <Button onClick={onAdd}><Plus className="w-5 h-5"/> Tambah</Button>}
-                            </div>
-                        </div>
-
-                        {showFilters && (
-                            <Card className="p-4 bg-slate-50 border-emerald-100 animate-fade-in">
-                                <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
-                                    <h4 className="font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4" /> Filter Data</h4>
-                                    <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
-                                        <XCircle className="w-3 h-3" /> Reset Filter
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                    <Select label="Kamar" value={activeFilters.kamar} onChange={(e) => handleFilterChange('kamar', e.target.value)} options={getUniqueOptions('kamar')} />
-                                    <Select label="Daerah" value={activeFilters.daerah} onChange={(e) => handleFilterChange('daerah', e.target.value)} options={getUniqueOptions('daerah')} />
-                                    <Select label="Wilayah" value={activeFilters.wilayah} onChange={(e) => handleFilterChange('wilayah', e.target.value)} options={getUniqueOptions('wilayah')} />
-                                    <Select label="Pendidikan" value={activeFilters.pendidikan} onChange={(e) => handleFilterChange('pendidikan', e.target.value)} options={getUniqueOptions('pendidikan')} />
-                                    <Select label="Jurusan" value={activeFilters.jurusan} onChange={(e) => handleFilterChange('jurusan', e.target.value)} options={getUniqueOptions('jurusan')} />
-                                    <Select label="Kelas" value={activeFilters.kelas} onChange={(e) => handleFilterChange('kelas', e.target.value)} options={getUniqueOptions('kelas')} />
-                                    <Select label="Jenjang" value={activeFilters.jenjang} onChange={(e) => handleFilterChange('jenjang', e.target.value)} options={getUniqueOptions('jenjang')} />
-                                    <Select label="Majelis Pagi" value={activeFilters['majelis-pagi']} onChange={(e) => handleFilterChange('majelis-pagi', e.target.value)} options={getUniqueOptions('majelis-pagi')} />
-                                    <Select label="Majelis Sore" value={activeFilters['majelis-sore']} onChange={(e) => handleFilterChange('majelis-sore', e.target.value)} options={getUniqueOptions('majelis-sore')} />
-                                </div>
-                            </Card>
-                        )}
-
-                        {extraHeader}
-
-                        <Card className="overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left text-slate-600">
-                                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
-                                        <tr>
-                                            {columns.map((col, idx) => (
-                                                <th key={idx} className="px-6 py-4 font-semibold whitespace-nowrap">{col.header}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredData.map((row, idx) => (
-                                            <tr 
-                                                key={idx} 
-                                                className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
-                                                onDoubleClick={() => onRowDoubleClick && onRowDoubleClick(row)}
-                                            >
-                                                {columns.map((col, cIdx) => (
-                                                    <td key={cIdx} className="px-6 py-4 whitespace-nowrap">
-                                                        {col.render ? col.render(row, idx) : row[col.accessor]}
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                        ))}
-                                        {filteredData.length === 0 && (
-                                            <tr>
-                                                <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-400">
-                                                    Tidak ada data ditemukan sesuai filter.
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 text-xs text-slate-500 flex justify-between items-center">
-                                <span>Menampilkan {filteredData.length} dari {data.length} data</span>
-                                <span className="text-slate-400 italic">Klik 2x pada baris untuk detail/edit</span>
-                            </div>
-                        </Card>
-                    </div>
-                )
-            }
-
-            const renderOwnershipView = () => {
-                const filledNiups = new Set(barangData.map(b => String(b.niup)));
-                
-                const missingData = santriData.filter(s => !filledNiups.has(String(s.niup)));
-                const filledData = getMergedBarangData(); 
-
-                const openForm = (data, mode) => {
-                    setEditBarangData(data);
-                    setShowBarangModal(true);
-                };
-
-                return (
-                    <TableView 
-                        title="Data Kepemilikan"
-                        data={ownershipTab === 'missing' ? missingData : filledData}
-                        onAdd={null} 
-                        extraHeader={
-                            <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl w-fit">
-                                <button 
-                                    onClick={() => setOwnershipTab('missing')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                        ownershipTab === 'missing' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                                >
-                                    Belum Diisi ({missingData.length})
-                                </button>
-                                <button 
-                                    onClick={() => setOwnershipTab('filled')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                        ownershipTab === 'filled' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                                >
-                                    Sudah Diisi ({filledData.length})
-                                </button>
-                            </div>
-                        }
-                        columns={ownershipTab === 'missing' ? [
-                            { header: 'No', render: (_, idx) => idx + 1 },
-                            { header: 'NIUP', accessor: 'niup' },
-                            { header: 'Nama', accessor: 'nama' },
-                            { header: 'Kamar', accessor: 'kamar' },
-                            { header: 'Kelas', accessor: 'kelas' },
-                            { header: 'Aksi', render: (row) => (
-                                <Button variant="info" className="py-1 px-3 text-xs" onClick={() => openForm(row, 'create')}>
-                                    <UserPlus className="w-3 h-3" /> Input
-                                </Button>
-                            )}
-                        ] : [
-                            { header: 'No', render: (_, idx) => idx + 1 },
-                            { header: 'NIUP', accessor: 'niup' },
-                            { header: 'Nama', accessor: 'nama' },
-                            { header: 'Kitab', render: (row) => (
-                                <span className={`px-2 py-1 rounded text-xs font-semibold ${row['kepemilikan-kitab'] === 'Ya' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                    {row['kepemilikan-kitab']}
-                                </span>
-                            )},
-                            { header: 'Rekapitulasi', render: (row) => (
-                                <span className="font-bold text-emerald-600">{row.rekapitulasi}</span>
-                            )},
-                            { header: 'Aksi', render: (row) => (
-                                <div className="flex gap-2">
-                                    <Button variant="secondary" className="py-1 px-2 text-xs" onClick={() => openForm(row, 'edit')}>
-                                        <Edit2 className="w-3 h-3" /> Detail/Edit
-                                    </Button>
-                                </div>
-                            )}
-                        ]}
-                    />
-                );
-            };
-
-            const SettingsView = () => (
-                <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl font-bold text-slate-800">Pengaturan Aplikasi</h2>
-                        <p className="text-slate-500">Konfigurasi koneksi database Google Sheets.</p>
-                    </div>
-
-                    <Card className="p-8">
-                        <div className="space-y-6">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Google Apps Script Web App URL</label>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" 
-                                        value={webAppUrl}
-                                        onChange={(e) => setWebAppUrl(e.target.value)}
-                                        placeholder="https://script.google.com/macros/s/..."
-                                        className="flex-1 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                    />
-                                    <Button onClick={() => {
-                                        localStorage.setItem('pdk_webapp_url', webAppUrl);
-                                        showToast("URL tersimpan!", "success");
-                                    }}>
-                                        <Save className="w-4 h-4" /> Simpan
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <div className="border-t border-slate-100 pt-6">
-                                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                                    <Activity className="w-4 h-4 text-slate-500" />
-                                    Status Koneksi
-                                </h4>
-                                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                            connectionStatus === 'success' ? 'bg-green-100 text-green-600' : 
-                                            connectionStatus === 'error' ? 'bg-red-100 text-red-600' :
-                                            'bg-slate-200 text-slate-500'
-                                        }`}>
-                                            {connectionStatus === 'success' ? <Wifi className="w-5 h-5" /> : 
-                                            connectionStatus === 'error' ? <WifiOff className="w-5 h-5" /> :
-                                            <Activity className="w-5 h-5" />}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-slate-900">
-                                                {connectionStatus === 'success' ? 'Terhubung' : 
-                                                connectionStatus === 'error' ? 'Gagal Terhubung' : 
-                                                connectionStatus === 'testing' ? 'Sedang mengecek...' :
-                                                'Belum dicek'}
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {connectionStatus === 'success' ? 'Siap mengirim data.' : 
-                                                'Klik tombol di kanan untuk tes.'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button 
-                                        variant={connectionStatus === 'success' ? 'success' : 'secondary'} 
-                                        onClick={testConnection} 
-                                        disabled={connectionStatus === 'testing'}
-                                    >
-                                        {connectionStatus === 'testing' ? 'Loading...' : 'Tes Koneksi'}
-                                    </Button>
-                                </div>
-                            </div>
-                            
-                            <p className="text-xs text-slate-500 bg-slate-50 p-4 rounded-lg leading-relaxed mt-4">
-                                <strong>Catatan:</strong><br/>
-                                Jika Tes Koneksi gagal (Error CORS), bukan berarti aplikasi rusak. Google sering memblokir "Test/Ping" dari browser langsung. Coba simpan data santri; jika berhasil, maka aplikasi berjalan normal.
-                            </p>
-                        </div>
-                    </Card>
-                </div>
-            )
-
-            // --- Main Layout Render ---
-
-            return (
-                <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-                {/* Global Loading Screen */}
-                {(!initialLoadDone) && <LoadingScreen />}
-                
-                {/* Toast Notification */}
-                {notification && (
-                    <Toast 
-                        message={notification.message} 
-                        type={notification.type} 
-                        onClose={() => setNotification(null)} 
-                    />
-                )}
-
-                {/* Sidebar Desktop - Disembunyikan di Mobile */}
-                <aside className={`bg-white border-r border-slate-200 hidden md:flex flex-col transition-all duration-300 z-20 ${isSidebarOpen ? 'w-64' : 'w-20'} h-full`}>
-                    <div className="h-20 flex items-center justify-center border-b border-slate-100">
-                        <div className={`flex items-center gap-3 ${!isSidebarOpen && 'justify-center'}`}>
-                            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-200">
-                                PDK
-                            </div>
-                            {isSidebarOpen && <span className="font-bold text-xl tracking-tight text-emerald-950">PDK System</span>}
-                        </div>
-                    </div>
-
-                    <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto">
-                        {navItems.map(item => (
-                            <button 
-                                key={item.id}
-                                onClick={() => { setView(item.id); if(window.innerWidth < 768) setIsSidebarOpen(false); }}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                                    view === item.id 
-                                    ? 'bg-emerald-50 text-emerald-700 font-semibold shadow-sm' 
-                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                } ${!isSidebarOpen && 'justify-center px-2'}`}
-                            >
-                                <item.icon className="w-5 h-5" />
-                                {isSidebarOpen && <span>{item.label}</span>}
-                            </button>
-                        ))}
-                    </nav>
-
-                    <div className="p-4 border-t border-slate-100">
-                        <button 
-                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className="w-full flex items-center justify-center p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition"
-                        >
-                            {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                        </button>
-                    </div>
-                </aside>
-
-                {/* Main Content */}
-                <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-                    {/* Header Mobile - Hanya Title */}
-                    <header className="md:hidden h-16 bg-white border-b border-slate-200 flex items-center px-4 justify-center">
-                        <span className="font-bold text-lg text-emerald-800">PDK System</span>
-                    </header>
-
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 relative pb-24 md:pb-8">
-                        {view === 'dashboard' && <Dashboard />}
-                        
-                        {view === 'santri' && (
-                            <TableView 
-                                title="Data Santri"
-                                data={santriData}
-                                onAdd={() => {
-                                    setEditSantriData(null);
-                                    setShowSantriModal(true);
-                                }}
-                                onRowDoubleClick={(row) => {
-                                    setEditSantriData(row);
-                                    setShowSantriModal(true);
-                                }}
-                                columns={[
-                                    { header: 'No', render: (_, idx) => idx + 1 },
-                                    { header: 'NIUP', accessor: 'niup' },
-                                    { header: 'Nama', accessor: 'nama' },
-                                    { header: 'Kamar', accessor: 'kamar' },
-                                    { header: 'Daerah', accessor: 'daerah' },
-                                    { header: 'Wilayah', accessor: 'wilayah' },
-                                    { header: 'Pendidikan', accessor: 'pendidikan' },
-                                    { header: 'Jurusan', accessor: 'jurusan' },
-                                    { header: 'Kelas', accessor: 'kelas' },
-                                    { header: 'Jenjang', accessor: 'jenjang' },
-                                    { header: 'Majelis Pagi', accessor: 'majelis-pagi' },
-                                    { header: 'Majelis Sore', accessor: 'majelis-sore' },
-                                    { header: 'Majelis Kamis Pagi', accessor: 'majelis-kamis-pagi' },
-                                    { header: 'Majelis Kamis Sore', accessor: 'majelis-kamis-sore' },
-                                ]}
+                        <div>
+                            <label className="text-xs text-gray-400 mb-2 block">Keterangan</label>
+                            <input 
+                                type="text" 
+                                value={editData.keterangan}
+                                onChange={(e) => setEditData({...editData, keterangan: e.target.value})}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm"
+                                placeholder="Tambahkan catatan..."
                             />
-                        )}
+                        </div>
 
-                        {view === 'barang' && renderOwnershipView()}
-
-                        {view === 'settings' && <SettingsView />}
+                        <div className="pt-4 flex gap-3">
+                            <button onClick={() => setEditData(null)} className="flex-1 py-2 text-gray-400 hover:text-white transition-colors">Batal</button>
+                            <button 
+                                onClick={handleSaveEdit} 
+                                disabled={isSavingEdit}
+                                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-2">
+                                {isSavingEdit ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Simpan Perubahan
+                            </button>
+                        </div>
                     </div>
+                )}
+            </Modal>
+        </div>
+    );
+  };
 
-                    {/* Bottom Navigation Bar - Hanya Mobile */}
-                    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center p-3 z-30 safe-area-bottom shadow-lg">
-                      {navItems.map(item => (
+  const DataPengurusView = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-white">Data Pengurus Biro</h2>
+        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20">
+          <Plus size={18} /> Tambah
+        </button>
+      </div>
+      
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-black/20 text-indigo-200">
+              <tr>
+                <th className="p-4">NIUP</th>
+                <th className="p-4">Nama Lengkap</th>
+                <th className="p-4">Jabatan</th>
+                <th className="p-4">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10 text-gray-300">
+              {pengurus.length > 0 ? pengurus.map((p, idx) => (
+                <tr key={idx} className="hover:bg-white/5 transition-colors">
+                  <td className="p-4 font-mono text-sm">{p.niup}</td>
+                  <td className="p-4 font-medium text-white">{p.nama}</td>
+                  <td className="p-4">
+                    <span className="px-2 py-1 bg-white/10 rounded-md text-xs border border-white/10">
+                      {p.jabatan}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <button className="text-red-400 hover:text-red-300 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              )) : (
+                 <tr>
+                    <td colSpan="4" className="p-8 text-center text-gray-500">
+                        {isLoading ? 'Memuat data...' : 'Tidak ada data pengurus.'}
+                    </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+
+  const DataLiburView = () => {
+    const [tglLibur, setTglLibur] = useState('');
+    const [ketLibur, setKetLibur] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleAddLibur = async () => {
+        if (!tglLibur || !ketLibur) return alert("Lengkapi data!");
+        setIsSaving(true);
+        try {
+            await fetch(`${apiUrl}?action=addLibur`, {
+                method: 'POST',
+                body: JSON.stringify({ tanggal: tglLibur, keterangan: ketLibur })
+            });
+            setTglLibur(''); setKetLibur('');
+            fetchData();
+        } catch(e) { alert("Gagal menyimpan"); }
+        setIsSaving(false);
+    };
+
+    const handleDeleteLibur = async (tanggal) => {
+        if(!confirm("Hapus libur ini?")) return;
+        try {
+            await fetch(`${apiUrl}?action=deleteLibur`, {
+                method: 'POST',
+                body: JSON.stringify({ tanggal })
+            });
+            fetchData();
+        } catch(e) { alert("Gagal menghapus"); }
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <h2 className="text-2xl font-bold text-white">Manajemen Hari Libur</h2>
+            <Card className="p-6">
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full">
+                        <label className="text-gray-400 text-sm mb-1 block">Tanggal Libur</label>
+                        <input type="date" value={tglLibur} onChange={e=>setTglLibur(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white"/>
+                    </div>
+                    <div className="flex-[2] w-full">
+                         <label className="text-gray-400 text-sm mb-1 block">Keterangan</label>
+                         <input type="text" placeholder="Contoh: Maulid Nabi" value={ketLibur} onChange={e=>setKetLibur(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white"/>
+                    </div>
+                    <button onClick={handleAddLibur} disabled={isSaving} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                        {isSaving ? '...' : 'Tambah Libur'}
+                    </button>
+                </div>
+            </Card>
+            <Card className="overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-black/20 text-red-200">
+                        <tr>
+                            <th className="p-4">Tanggal</th>
+                            <th className="p-4">Keterangan</th>
+                            <th className="p-4 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10 text-gray-300">
+                        {dataLibur.map((l, i) => (
+                            <tr key={i} className="hover:bg-white/5">
+                                <td className="p-4 font-mono">{l.tanggal}</td>
+                                <td className="p-4">{l.keterangan}</td>
+                                <td className="p-4 text-right">
+                                    <button onClick={() => handleDeleteLibur(l.tanggal)} className="text-red-400 hover:text-red-300"><Trash2 size={18}/></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </Card>
+        </div>
+    );
+  };
+
+  const JadwalSoreView = () => {
+    const [editingDay, setEditingDay] = useState(null); 
+    const [tempPetugas, setTempPetugas] = useState([]); 
+    const [isSaving, setIsSaving] = useState(false);
+
+    const openEdit = (hari) => {
+        setEditingDay(hari);
+        setTempPetugas(jadwalSore[hari] || []);
+    };
+
+    const togglePetugas = (p) => {
+        const exists = tempPetugas.some(tp => tp.niup === p.niup);
+        if (exists) {
+            setTempPetugas(tempPetugas.filter(tp => tp.niup !== p.niup));
+        } else {
+            setTempPetugas([...tempPetugas, { niup: p.niup, nama: p.nama }]);
+        }
+    };
+
+    const saveJadwal = async () => {
+        setIsSaving(true);
+        const payload = { hari: editingDay, petugas: tempPetugas };
+        try {
+            await fetch(`${apiUrl}?action=saveJadwalSore`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            setJadwalSore(prev => ({ ...prev, [editingDay]: tempPetugas }));
+            setEditingDay(null);
+        } catch(e) { alert("Gagal menyimpan jadwal"); }
+        setIsSaving(false);
+    };
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="bg-gradient-to-r from-purple-900/50 to-indigo-900/50 p-6 rounded-2xl border border-white/10">
+          <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+            <Moon className="text-indigo-300" /> Jadwal Kantor Sore
+          </h2>
+          <p className="text-indigo-200">Shift Khusus: 16.00 – 22.00 WIB</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {['Sabtu', 'Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis'].map((hari) => {
+            const petugasHariIni = jadwalSore[hari] || [];
+            return (
+              <Card key={hari} className="p-5 hover:border-indigo-500/50 transition-colors group relative">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-white">{hari}</h3>
+                  <span className="text-xs font-mono text-gray-400 bg-white/5 px-2 py-1 rounded">16:00 - 22:00</span>
+                </div>
+                <div className="space-y-2 min-h-[80px]">
+                  {petugasHariIni.length > 0 ? petugasHariIni.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
+                      <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center text-xs text-indigo-200 font-bold">
+                        {p.nama ? p.nama.substring(0,2) : '??'}
+                      </div>
+                      <span className="text-sm text-gray-300">{p.nama}</span>
+                    </div>
+                  )) : (
+                     <p className="text-xs text-gray-500 italic">Belum ada petugas.</p>
+                  )}
+                </div>
+                <button 
+                  onClick={() => openEdit(hari)}
+                  className="w-full mt-4 py-2 flex items-center justify-center gap-2 border border-dashed border-white/20 text-gray-400 text-xs rounded-lg hover:bg-white/5 transition-colors group-hover:border-indigo-500/30 group-hover:text-indigo-300">
+                  <Edit3 size={14}/> Edit Petugas
+                </button>
+              </Card>
+            );
+          })}
+        </div>
+
+        <Modal isOpen={!!editingDay} onClose={() => setEditingDay(null)} title={`Edit Jadwal: ${editingDay}`}>
+            <div className="max-h-[300px] overflow-y-auto space-y-2 mb-4 pr-2 custom-scrollbar">
+                {pengurus.map((p, idx) => {
+                    const isSelected = tempPetugas.some(tp => tp.niup === p.niup);
+                    return (
+                        <div key={`${p.niup}-${idx}`} 
+                             onClick={() => togglePetugas(p)}
+                             className={`p-3 rounded-lg cursor-pointer flex items-center justify-between transition-all ${isSelected ? 'bg-indigo-600/30 border border-indigo-500' : 'bg-white/5 border border-transparent hover:bg-white/10'}`}>
+                            <span className="text-sm text-white">{p.nama}</span>
+                            {isSelected && <CheckCircle2 size={16} className="text-indigo-400"/>}
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
+                <button onClick={() => setEditingDay(null)} className="px-4 py-2 text-sm text-gray-400 hover:text-white">Batal</button>
+                <button onClick={saveJadwal} disabled={isSaving} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm flex items-center gap-2">
+                    {isSaving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} Simpan
+                </button>
+            </div>
+        </Modal>
+      </div>
+    );
+  };
+
+  const SettingsView = () => (
+    <div className="space-y-6 animate-fade-in">
+        <h2 className="text-2xl font-bold text-white">Pengaturan</h2>
+        <Card className="p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Database</h3>
+            <input type="text" value={apiUrl} onChange={e => setApiUrl(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm" placeholder="URL Apps Script"/>
+            <button onClick={fetchData} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg">Test Connection</button>
+        </Card>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#0f0c29] text-gray-100 font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+      </div>
+
+      <div className="relative z-10 flex min-h-screen pb-24 lg:pb-0">
+        {/* DESKTOP SIDEBAR */}
+        <aside className={`hidden lg:flex fixed lg:sticky top-0 h-screen ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-black/40 backdrop-blur-xl border-r border-white/10 transition-all duration-300 z-50 flex-col`}>
+          <div className="p-6 flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+              <CalendarDays className="text-white" size={24} />
+            </div>
+            {!isSidebarCollapsed && (
+              <div className="overflow-hidden whitespace-nowrap animate-fade-in">
+                <h1 className="font-bold text-white leading-tight">ABSEN</h1>
+                <p className="text-xs text-indigo-300">BIKTREN</p>
+              </div>
+            )}
+          </div>
+
+          <nav className="flex-1 px-4 space-y-2">
+            {menuItems.map((item) => (
+               <button 
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  title={isSidebarCollapsed ? item.label : ''}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative
+                    ${activeTab === item.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-400 hover:bg-white/5 hover:text-white'}
+                    ${isSidebarCollapsed ? 'justify-center' : ''}
+                  `}
+                >
+                  <item.icon size={20} className="shrink-0" />
+                  {!isSidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
+               </button>
+            ))}
+          </nav>
+
+          <div className="p-4 border-t border-white/10 flex justify-end">
+             <button 
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 rounded-lg w-full flex justify-center"
+             >
+               {isSidebarCollapsed ? <ChevronRight size={20}/> : <ChevronLeft size={20}/>}
+             </button>
+          </div>
+        </aside>
+
+        {/* MOBILE BOTTOM NAV */}
+        <nav className="fixed bottom-0 left-0 w-full bg-[#0f0c29]/90 backdrop-blur-xl border-t border-white/10 z-50 lg:hidden px-4 py-3 flex justify-between items-center gap-2">
+             {menuItems.slice(0, 5).map((item) => { // Limit to 5 items for mobile space
+               const isActive = activeTab === item.id;
+               return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center justify-center rounded-xl transition-all duration-300 
+                    ${isActive 
+                       ? 'flex-grow bg-indigo-600/20 text-indigo-300 py-2 px-4 gap-2' 
+                       : 'w-10 h-10 text-gray-400 hover:text-white'
+                    }
+                  `}
+                >
+                  <item.icon size={20} className={`${isActive ? 'text-indigo-400 drop-shadow-[0_0_5px_rgba(129,140,248,0.5)]' : ''}`}/>
+                  {isActive && <span className="text-xs font-bold whitespace-nowrap animate-fade-in">{item.label}</span>}
+                </button>
+               )
+             })}
+             <button
+               onClick={() => setIsMobileMenuOpen(true)} // Open full menu modal if needed
+               className={`w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white`}
+             >
+                <Menu size={20}/>
+             </button>
+        </nav>
+
+         {/* Mobile Full Menu Overlay (For items not fitting in bottom bar) */}
+         {isMobileMenuOpen && (
+            <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex flex-col justify-end lg:hidden animate-fade-in">
+               <div className="bg-[#1a1a2e] rounded-t-2xl p-6 border-t border-white/10">
+                  <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-xl font-bold text-white">Menu Lengkap</h3>
+                     <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400"><X size={24}/></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                     {menuItems.map(item => (
                         <button
                           key={item.id}
-                          onClick={() => setView(item.id)}
-                          className={`flex items-center justify-center p-2 rounded-full transition-all duration-300 ${
-                            view === item.id 
-                              ? 'bg-emerald-100 text-emerald-700 px-4' 
-                              : 'text-slate-400 w-12'
-                          }`}
+                          onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
+                          className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all
+                             ${activeTab === item.id ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300' : 'bg-white/5 border-transparent text-gray-400'}
+                          `}
                         >
-                          <item.icon className="w-6 h-6" />
-                          {view === item.id && (
-                            <span className="ml-2 text-sm font-medium whitespace-nowrap animate-slide-in-right">
-                              {item.label}
-                            </span>
-                          )}
+                           <item.icon size={24} className="mb-2"/>
+                           <span className="text-sm">{item.label}</span>
                         </button>
-                      ))}
-                    </nav>
-                </main>
+                     ))}
+                  </div>
+               </div>
+            </div>
+         )}
 
-                {/* Modals */}
-                {showSantriModal && <SantriForm onClose={() => setShowSantriModal(false)} initialData={editSantriData} />}
-                {showBarangModal && <BarangForm onClose={() => setShowBarangModal(false)} initialData={editBarangData} />}
-                </div>
-            );
-        }
+        {/* MAIN CONTENT */}
+        <main className={`flex-1 p-4 lg:p-8 overflow-x-hidden transition-all duration-300`}>
+          {/* Header Mobile Title */}
+          <div className="lg:hidden flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
+                 <CalendarDays className="text-white" size={18} />
+              </div>
+              <span className="font-bold text-white text-lg">ABSEN BIKTREN</span>
+            </div>
+          </div>
 
-        // Initialize App
-        const root = createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+          {activeTab === 'dashboard' && <DashboardView />}
+          {activeTab === 'pengurus' && <DataPengurusView />}
+          {activeTab === 'absensi' && <AbsensiView />}
+          {activeTab === 'rekap' && <RekapView />}
+          {activeTab === 'jadwal' && <JadwalSoreView />}
+          {activeTab === 'libur' && <DataLiburView />}
+          {activeTab === 'settings' && <SettingsView />}
+        </main>
+      </div>
+    </div>
+  );
+}
