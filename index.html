@@ -1,1102 +1,1216 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LayoutDashboard, 
-  Users, 
-  CalendarCheck, 
-  Moon, 
-  Sun, 
-  Plus, 
-  Save, 
-  Trash2, 
-  Search, 
-  Menu, 
-  Coffee,
-  AlertCircle,
-  CheckCircle2,
-  Settings,
-  FileText,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-  Download,
-  Loader2,
-  CalendarOff,
-  X,
-  Edit3,
-  Clock,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
-
-// --- INITIAL CONFIG ---
-const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwdRcretj2IgsFPOdLaVorx9j53QseaFcJ4UTRWBYTnSzmpW4mCLTAgXpdSv0Ruxb9J/exec";
-
-// --- HELPERS ---
-const getWIBDateString = () => {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-};
-
-// --- MOCK DATA ---
-const MOCK_PENGURUS = [
-  { id: 1, niup: '2026001', nama: 'Ust. Ahmad Zaini', jabatan: 'Kepala Biro' },
-  { id: 2, niup: '2026002', nama: 'Ust. Faisal Reza', jabatan: 'Sekretaris' },
-];
-
-const MOCK_ABSENSI = [
-  { id: 1, tanggal: '2026-01-01', niup: '2026001', nama: 'Ust. Ahmad Zaini', status: 'Hadir', shift: 'Pagi', keterangan: '' },
-];
-
-// --- COMPONENTS ---
-
-const Card = ({ children, className = "" }) => (
-  <div className={`bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl overflow-hidden ${className}`}>
-    {children}
-  </div>
-);
-
-const Badge = ({ status, mini = false }) => {
-  const colors = {
-    Hadir: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    Sakit: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-    Izin: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-    Alpha: 'bg-red-500/20 text-red-300 border-red-500/30',
-    Libur: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  };
-  
-  if (mini) {
-     const miniColors = {
-        Hadir: 'bg-emerald-500 text-white',
-        Sakit: 'bg-yellow-500 text-black',
-        Izin: 'bg-blue-500 text-white',
-        Alpha: 'bg-red-500 text-white',
-     };
-     return (
-        <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${miniColors[status] || 'bg-gray-700'}`} title={status}>
-            {status ? status.charAt(0) : '-'}
-        </div>
-     );
-  }
-
-  return (
-    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${colors[status] || colors.Alpha}`}>
-      {status}
-    </span>
-  );
-};
-
-const Modal = ({ isOpen, onClose, title, children }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1a2e] border border-white/20 rounded-2xl w-full max-w-md p-6 relative animate-fade-in shadow-2xl">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={24} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-};
-
-export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // Data State
-  const [pengurus, setPengurus] = useState(MOCK_PENGURUS);
-  const [absensi, setAbsensi] = useState(MOCK_ABSENSI);
-  const [dataLibur, setDataLibur] = useState([]);
-  const [jadwalSore, setJadwalSore] = useState({}); 
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Settings State
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
-  const [connectionStatus, setConnectionStatus] = useState('idle');
-  const [lastSync, setLastSync] = useState(null);
-
-  // --- LOGIC ---
-  const todayStr = getWIBDateString();
-  const todayDate = new Date();
-  const isFriday = todayDate.getDay() === 5;
-
-  const fetchData = async () => {
-    if (!apiUrl) return;
-    setIsLoading(true);
-    setConnectionStatus('testing');
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABSEN BIKTREN - Aplikasi Absensi Biro 2026</title>
     
-    try {
-      const [resPengurus, resAbsensi, resLibur, resJadwal] = await Promise.all([
-        fetch(`${apiUrl}?action=getPengurus`),
-        fetch(`${apiUrl}?action=getAbsensi`),
-        fetch(`${apiUrl}?action=getLibur`),
-        fetch(`${apiUrl}?action=getJadwalSore`)
-      ]);
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='4' rx='2' ry='2'/><line x1='16' x2='16' y1='2' y2='6'/><line x1='8' x2='8' y1='2' y2='6'/><line x1='3' x2='21' y1='10' y2='10'/></svg>">
 
-      const dataPengurus = await resPengurus.json();
-      const dataAbsensi = await resAbsensi.json();
-      const dataLiburRes = await resLibur.json();
-      const dataJadwalRes = await resJadwal.json();
-      
-      if (dataPengurus.status === 'success') {
-        setPengurus(dataPengurus.data);
-        setConnectionStatus('success');
-      }
-
-      if (dataAbsensi.status === 'success') setAbsensi(dataAbsensi.data);
-      if (dataLiburRes.status === 'success') setDataLibur(dataLiburRes.data);
-      if (dataJadwalRes.status === 'success') {
-         const mapJadwal = {};
-         dataJadwalRes.data.forEach(item => {
-            try {
-                mapJadwal[item.hari] = JSON.parse(item.petugas);
-            } catch(e) {
-                mapJadwal[item.hari] = [];
-            }
-         });
-         setJadwalSore(mapJadwal);
-      }
-
-      setLastSync(new Date());
-
-    } catch (error) {
-      console.error("Connection failed", error);
-      setConnectionStatus('error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // Statistik Dashboard
-  const stats = useMemo(() => {
-    const totalPengurus = pengurus.length;
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    const isLiburManual = dataLibur.some(l => l.tanggal === todayStr);
-
-    const todayAbsensi = absensi.filter(a => a.tanggal === todayStr);
-    const hadirHariIni = todayAbsensi.filter(a => a.status === 'Hadir').length;
-    const attendanceRate = totalPengurus > 0 ? Math.round((hadirHariIni / totalPengurus) * 100) : 0;
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    return {
-      total: totalPengurus,
-      hadir: hadirHariIni,
-      rate: attendanceRate,
-      sakit: todayAbsensi.filter(a => a.status === 'Sakit').length,
-      izin: todayAbsensi.filter(a => a.status === 'Izin').length,
-      statusHariIni: isFriday || isLiburManual ? 'Libur' : 'Masuk'
-    };
-  }, [pengurus, absensi, dataLibur, todayStr, isFriday]);
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  // --- MENU CONFIG ---
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'pengurus', label: 'Data Pengurus', icon: Users },
-    { id: 'absensi', label: 'Absensi', icon: CalendarCheck },
-    { id: 'rekap', label: 'Rekapitulasi', icon: FileText },
-    { id: 'jadwal', label: 'Kantor Sore', icon: Moon },
-    { id: 'libur', label: 'Data Libur', icon: CalendarOff },
-    { id: 'settings', label: 'Pengaturan', icon: Settings },
-  ];
-
-  // --- VIEWS ---
-
-  const DashboardView = () => (
-    <div className="space-y-6 animate-fade-in">
-      {connectionStatus === 'error' && (
-        <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center gap-3">
-          <WifiOff size={20} />
-          <span>Koneksi ke Google Sheet gagal. Menggunakan data lokal. Cek menu Pengaturan.</span>
-        </div>
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6 bg-gradient-to-br from-indigo-500/20 to-purple-500/20">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-indigo-200 text-sm font-medium">Total Pengurus</p>
-              <h3 className="text-4xl font-bold text-white mt-2">{stats.total}</h3>
-            </div>
-            <div className="p-3 bg-indigo-500/30 rounded-lg text-white">
-              <Users size={24} />
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-emerald-200 text-sm font-medium">Hadir Hari Ini</p>
-              <h3 className="text-4xl font-bold text-white mt-2">{stats.hadir}</h3>
-            </div>
-            <div className="p-3 bg-emerald-500/30 rounded-lg text-white">
-              <CheckCircle2 size={24} />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-pink-500/20 to-rose-500/20">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-pink-200 text-sm font-medium">Kehadiran (%)</p>
-              <h3 className="text-4xl font-bold text-white mt-2">{stats.rate}%</h3>
-            </div>
-            <div className="p-3 bg-pink-500/30 rounded-lg text-white">
-              <LayoutDashboard size={24} />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-amber-200 text-sm font-medium">Sakit / Izin</p>
-              <h3 className="text-4xl font-bold text-white mt-2">{stats.sakit + stats.izin}</h3>
-            </div>
-            <div className="p-3 bg-amber-500/30 rounded-lg text-white">
-              <AlertCircle size={24} />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 min-h-[300px]">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <CalendarCheck className="text-indigo-400" /> Status Hari Ini
-          </h3>
-          <div className="space-y-4">
-             <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                <span className="text-gray-300">Hari</span>
-                <span className="font-bold text-white">{new Date().toLocaleDateString('id-ID', { weekday: 'long' })}</span>
-             </div>
-             <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                <span className="text-gray-300">Status Operasional</span>
-                {stats.statusHariIni === 'Libur' ? (
-                  <span className="text-red-400 font-bold flex items-center gap-2"><Coffee size={18}/> LIBUR (Jum'at / Tgl Merah)</span>
-                ) : (
-                  <span className="text-emerald-400 font-bold flex items-center gap-2"><Sun size={18}/> Buka Normal</span>
-                )}
-             </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-           <h3 className="text-xl font-bold text-white mb-4">Agenda Libur Terdekat</h3>
-           <div className="space-y-3">
-             {dataLibur.length > 0 ? dataLibur.map((l, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
-                    <span className="text-red-300 font-medium">{l.tanggal}</span>
-                    <span className="text-gray-300 text-sm">{l.keterangan}</span>
-                </div>
-             )) : (
-                 <p className="text-gray-500 text-sm">Tidak ada data libur.</p>
-             )}
-           </div>
-        </Card>
-      </div>
-    </div>
-  );
-
-  const AbsensiView = () => {
-    const [selectedDate, setSelectedDate] = useState(getWIBDateString());
-    const [selectedShift, setSelectedShift] = useState('Pagi');
-    const isTodayFriday = new Date(selectedDate).getDay() === 5;
-    const isTodayLibur = dataLibur.some(l => l.tanggal === selectedDate);
-
-    const [statusMap, setStatusMap] = useState({});
-    const [ketMap, setKetMap] = useState({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // LOGIC: Filter pengurus berdasarkan Jadwal Kantor Sore
-    const pendingPengurus = useMemo(() => {
-        // 1. Tentukan Nama Hari (Ahad, Senin, dst) dari selectedDate
-        const days = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        const dayIndex = new Date(selectedDate).getDay(); // 0 = Ahad
-        const dayName = days[dayIndex];
-
-        // 2. Ambil List NIUP yang jadwal sore hari ini
-        const jadwalHariIni = jadwalSore[dayName] || [];
-        const soreNiups = jadwalHariIni.map(p => p.niup);
-
-        // 3. Filter daftar pengurus sesuai Shift yang dipilih
-        let targetList = [];
-        if (selectedShift === 'Sore') {
-            // Shift Sore: Hanya tampilkan yang ada di jadwal sore
-            targetList = pengurus.filter(p => soreNiups.includes(p.niup));
-        } else {
-            // Shift Pagi: Tampilkan SEMUA KECUALI yang jadwal sore
-            targetList = pengurus.filter(p => !soreNiups.includes(p.niup));
+    <!-- Custom Style & Animation -->
+    <style>
+        body {
+            background-color: #0f0c29;
+            color: #f3f4f6;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
-
-        // 4. Sembunyikan yang sudah absen pada tanggal & shift ini
-        return targetList.filter(p => {
-            const alreadyRecorded = absensi.some(
-                log => log.niup === p.niup && log.tanggal === selectedDate && log.shift === selectedShift
-            );
-            return !alreadyRecorded;
-        });
-    }, [pengurus, absensi, selectedDate, selectedShift, jadwalSore]);
-
-    const handleAbsenChange = (niup, status) => {
-        setStatusMap(prev => ({ ...prev, [niup]: status }));
-    };
-
-    const handleKetChange = (niup, ket) => {
-        setKetMap(prev => ({ ...prev, [niup]: ket }));
-    };
-
-    const handleSubmit = async () => {
-        if (Object.keys(statusMap).length === 0) {
-            return alert("Pilih minimal satu status kehadiran.");
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
         }
-        
-        setIsSubmitting(true);
-        const records = Object.keys(statusMap).map(niup => {
-            const p = pengurus.find(item => item.niup === niup);
-            return {
-                niup: niup,
-                nama: p?.nama || 'Unknown',
-                status: statusMap[niup],
-                shift: selectedShift,
-                keterangan: ketMap[niup] || ''
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out forwards;
+        }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.95); }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="env,react">
+        // --- SETUP & IMPORTS ---
+        const { useState, useEffect, useMemo } = React;
+
+        // --- INLINE ICONS ---
+        const Icon = ({ children, size = 24, className = "" }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width={size} 
+                height={size} 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                {children}
+            </svg>
+        );
+
+        const LayoutDashboard = (props) => <Icon {...props}><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></Icon>;
+        const Users = (props) => <Icon {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Icon>;
+        const CalendarCheck = (props) => <Icon {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></Icon>;
+        const Moon = (props) => <Icon {...props}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></Icon>;
+        const Sun = (props) => <Icon {...props}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></Icon>;
+        const Plus = (props) => <Icon {...props}><path d="M5 12h14"/><path d="M12 5v14"/></Icon>;
+        const Save = (props) => <Icon {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Icon>;
+        const Trash2 = (props) => <Icon {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></Icon>;
+        const Search = (props) => <Icon {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Icon>;
+        const Menu = (props) => <Icon {...props}><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>;
+        const Coffee = (props) => <Icon {...props}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></Icon>;
+        const AlertCircle = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></Icon>;
+        const CheckCircle2 = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></Icon>;
+        const Settings = (props) => <Icon {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.35a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
+        const FileText = (props) => <Icon {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></Icon>;
+        const Wifi = (props) => <Icon {...props}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/></Icon>;
+        const WifiOff = (props) => <Icon {...props}><line x1="2" x2="22" y1="2" y2="22"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/><path d="M1.42 9a16 16 0 0 1 6.34-2.6"/><path d="M22.58 9a16 16 0 0 0-6.08-2.6"/></Icon>;
+        const RefreshCw = (props) => <Icon {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></Icon>;
+        const Download = (props) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></Icon>;
+        const Loader2 = (props) => <Icon {...props}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+        const CalendarOff = (props) => <Icon {...props}><line x1="2" x2="22" y1="2" y2="22"/><path d="M10.68 6.5c.34-.17.7-.32 1.07-.42L12 6l.25.08a9.92 9.92 0 0 1 6.22 3.46"/><path d="M19.07 19.07A9.96 9.96 0 0 1 12 22a9.92 9.92 0 0 1-6.22-3.46"/><path d="M4.93 4.93A9.96 9.96 0 0 0 2 12a10 10 0 0 0 1.25 4.75"/><path d="M22 12a10 10 0 0 0-1.25-4.75"/></Icon>;
+        const X = (props) => <Icon {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>;
+        const Edit3 = (props) => <Icon {...props}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></Icon>;
+        const Clock = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>;
+        const CalendarDays = (props) => <Icon {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></Icon>;
+        const ChevronLeft = (props) => <Icon {...props}><path d="m15 18-6-6 6-6"/></Icon>;
+        const ChevronRight = (props) => <Icon {...props}><path d="m9 18 6-6-6-6"/></Icon>;
+
+        // --- COMPONENTS DEFINITIONS ---
+
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl overflow-hidden ${className}`}>
+                {children}
+            </div>
+        );
+
+        const Badge = ({ status, mini = false }) => {
+            const colors = {
+                Hadir: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+                Sakit: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+                Izin: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+                Alpha: 'bg-red-500/20 text-red-300 border-red-500/30',
+                Libur: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
             };
-        });
-
-        const payload = { tanggal: selectedDate, records: records };
-
-        try {
-            const response = await fetch(`${apiUrl}?action=submitAbsensi`, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            const result = await response.json();
-            if (result.status === 'success') {
-                alert('Absensi berhasil disimpan!');
-                setStatusMap({});
-                setKetMap({});
-                fetchData();
-            } else {
-                alert('Gagal: ' + result.message);
-            }
-        } catch (e) { alert('Error koneksi.'); }
-        setIsSubmitting(false);
-    };
-
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <h2 className="text-2xl font-bold text-white">Input Absensi Harian</h2>
-              <div className="flex gap-3">
-                  <div className="bg-white/5 p-1 rounded-lg border border-white/10">
-                      <select 
-                        value={selectedShift}
-                        onChange={(e) => setSelectedShift(e.target.value)}
-                        className="bg-transparent text-white px-3 py-1 outline-none font-medium cursor-pointer"
-                      >
-                          <option value="Pagi" className="bg-[#1a1a2e]">Shift Pagi</option>
-                          <option value="Sore" className="bg-[#1a1a2e]">Shift Sore</option>
-                      </select>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
-                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-transparent text-white px-3 py-1 outline-none"/>
-                  </div>
-              </div>
-          </div>
-          
-          <div className="bg-indigo-900/30 border border-indigo-500/30 p-3 rounded-lg flex items-center gap-3 text-sm text-indigo-200">
-             <Clock size={16} />
-             <span>
-               Menampilkan <b>{selectedShift === 'Pagi' ? 'Pengurus Reguler' : 'Petugas Jadwal Sore'}</b> yang belum absen tanggal <b>{selectedDate}</b>.
-             </span>
-          </div>
-        </div>
-
-        {isTodayFriday || isTodayLibur ? (
-           <div className="p-8 text-center border-2 border-dashed border-white/10 rounded-2xl bg-white/5">
-             <Coffee className="mx-auto text-yellow-400 mb-4" size={48} />
-             <h3 className="text-xl font-bold text-white">Hari Ini Libur</h3>
-             <p className="text-gray-400 mt-2">{isTodayFriday ? "Hari Jum'at" : "Tanggal Merah Tercatat"}. Absensi ditiadakan.</p>
-           </div>
-        ) : (
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-black/20 text-indigo-200">
-                  <tr>
-                    <th className="p-4">Nama Pengurus</th>
-                    <th className="p-4 text-center">Kehadiran</th>
-                    <th className="p-4">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10 text-gray-300">
-                  {pendingPengurus.length > 0 ? pendingPengurus.map((p, idx) => (
-                    <tr key={`${p.niup}-${idx}`} className="hover:bg-white/5 transition-colors">
-                      <td className="p-4">
-                        <div className="font-medium text-white">{p.nama}</div>
-                        <div className="text-xs text-gray-500">{p.jabatan}</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex justify-center gap-4">
-                            {['Hadir', 'Sakit', 'Izin', 'Alpha'].map((status) => (
-                                <label key={status} className="flex flex-col items-center cursor-pointer group">
-                                    <input 
-                                    type="radio" 
-                                    name={`status-${p.niup}`} 
-                                    onChange={() => handleAbsenChange(p.niup, status)}
-                                    checked={statusMap[p.niup] === status}
-                                    className={`w-5 h-5 appearance-none rounded-full border-2 border-white/20 checked:border-transparent transition-all mb-1
-                                        ${status === 'Hadir' ? 'checked:bg-emerald-500' : ''}
-                                        ${status === 'Sakit' ? 'checked:bg-yellow-500' : ''}
-                                        ${status === 'Izin' ? 'checked:bg-blue-500' : ''}
-                                        ${status === 'Alpha' ? 'checked:bg-red-500' : ''}
-                                    `}
-                                    />
-                                    <span className={`text-[10px] group-hover:text-white transition-colors ${statusMap[p.niup] === status ? 'text-white font-bold' : 'text-gray-500'}`}>{status}</span>
-                                </label>
-                            ))}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <input 
-                            type="text" 
-                            placeholder="Catatan (Opsional)..." 
-                            value={ketMap[p.niup] || ''}
-                            onChange={(e) => handleKetChange(p.niup, e.target.value)}
-                            className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white w-full focus:border-indigo-500 outline-none transition-colors" 
-                        />
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr>
-                        <td colSpan="3" className="p-12 text-center text-gray-400">
-                            <CheckCircle2 size={48} className="mx-auto text-emerald-500/50 mb-3"/>
-                            <p className="font-medium text-white">
-                                {selectedShift === 'Sore' ? 'Tidak ada petugas sore yang belum absen.' : 'Semua pengurus reguler sudah diabsen!'}
-                            </p>
-                            {selectedShift === 'Sore' && <p className="text-xs mt-1">Pastikan jadwal sore sudah diisi di menu Kantor Sore.</p>}
-                        </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {pendingPengurus.length > 0 && (
-                <div className="p-4 border-t border-white/10 flex justify-end">
-                <button 
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
-                    {isSubmitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18} />} 
-                    {isSubmitting ? 'Menyimpan...' : 'Simpan Absensi'}
-                </button>
-                </div>
-            )}
-          </Card>
-        )}
-      </div>
-    );
-  };
-
-  const RekapView = () => {
-    const [filterTahun, setFilterTahun] = useState(new Date().getFullYear());
-    const [filterBulan, setFilterBulan] = useState(new Date().getMonth());
-    const [filterShift, setFilterShift] = useState('Pagi');
-    const [filterTanggal, setFilterTanggal] = useState('');
-    
-    const [editData, setEditData] = useState(null);
-    const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-    const filteredRaw = useMemo(() => {
-        return absensi.filter(item => {
-            const date = new Date(item.tanggal);
-            const itemYear = date.getFullYear();
-            const itemMonth = date.getMonth();
-            const itemDateStr = item.tanggal; 
-
-            if (item.shift !== filterShift) return false;
-
-            if (filterTanggal) {
-                return itemDateStr === filterTanggal;
+            
+            if (mini) {
+                const miniColors = {
+                    Hadir: 'bg-emerald-500 text-white',
+                    Sakit: 'bg-yellow-500 text-black',
+                    Izin: 'bg-blue-500 text-white',
+                    Alpha: 'bg-red-500 text-white',
+                };
+                return (
+                    <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${miniColors[status] || 'bg-gray-700'}`} title={status}>
+                        {status ? status.charAt(0) : '-'}
+                    </div>
+                );
             }
 
-            let match = itemYear === parseInt(filterTahun) && itemMonth === parseInt(filterBulan);
-            return match;
-        });
-    }, [absensi, filterTahun, filterBulan, filterShift, filterTanggal]);
-
-    const uniqueDates = useMemo(() => {
-        const dates = new Set(filteredRaw.map(item => item.tanggal));
-        return Array.from(dates).sort();
-    }, [filteredRaw]);
-
-    const formatDateHeader = (dateStr) => {
-        const [y, m, d] = dateStr.split('-');
-        return `${d}/${m}`;
-    };
-
-    const handleCellClick = (p, dateStr) => {
-        const record = filteredRaw.find(r => r.niup === p.niup && r.tanggal === dateStr);
-        setEditData({
-            niup: p.niup,
-            nama: p.nama,
-            tanggal: dateStr,
-            shift: filterShift,
-            status: record ? record.status : 'Alpha',
-            keterangan: record ? (record.keterangan || '') : ''
-        });
-    };
-
-    const handleSaveEdit = async () => {
-        if (!editData) return;
-        setIsSavingEdit(true);
-        const payload = {
-            tanggal: editData.tanggal,
-            records: [{
-                niup: editData.niup,
-                nama: editData.nama,
-                status: editData.status,
-                shift: editData.shift,
-                keterangan: editData.keterangan
-            }]
+            return (
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${colors[status] || colors.Alpha}`}>
+                    {status}
+                </span>
+            );
         };
 
-        try {
-            const response = await fetch(`${apiUrl}?action=submitAbsensi`, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            await response.json();
-            alert('Data berhasil diperbarui!');
-            fetchData();
-            setEditData(null);
-        } catch(e) { alert('Gagal update data'); }
-        setIsSavingEdit(false);
-    };
-
-    return (
-        <div className="space-y-6 animate-fade-in">
-             <div className="bg-gradient-to-r from-blue-900/50 to-cyan-900/50 p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <FileText className="text-cyan-300" /> Rekapitulasi Absensi
-                    </h2>
-                    <p className="text-cyan-200 text-sm">Klik pada kotak status untuk mengedit data.</p>
-                </div>
-                <button className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition-all">
-                    <Download size={16} /> Export CSV
-                </button>
-            </div>
-
-            <Card className="p-4">
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                        <label className="text-xs text-gray-400 mb-1 block">Shift</label>
-                        <select 
-                            value={filterShift}
-                            onChange={(e) => setFilterShift(e.target.value)}
-                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
-                        >
-                            <option value="Pagi">Pagi</option>
-                            <option value="Sore">Sore</option>
-                        </select>
-                    </div>
-                    <div className="flex-1 w-full">
-                        <label className="text-xs text-gray-400 mb-1 block">Bulan</label>
-                        <select 
-                            value={filterBulan}
-                            onChange={(e) => setFilterBulan(e.target.value)}
-                            disabled={!!filterTanggal}
-                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm disabled:opacity-50"
-                        >
-                            {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((m, i) => (
-                                <option key={i} value={i}>{m}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="flex-1 w-full">
-                        <label className="text-xs text-gray-400 mb-1 block">Tahun</label>
-                        <select 
-                            value={filterTahun}
-                            onChange={(e) => setFilterTahun(e.target.value)}
-                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
-                        >
-                            <option value="2025">2025</option>
-                            <option value="2026">2026</option>
-                        </select>
-                    </div>
-                </div>
-            </Card>
-
-            <Card className="overflow-hidden">
-                <div className="overflow-x-auto custom-scrollbar pb-2">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-black/20 text-cyan-200">
-                            <tr>
-                                <th className="p-4 border-b border-white/10 sticky left-0 bg-[#16162c] z-10 w-48 shadow-lg border-r">Nama Pengurus</th>
-                                {uniqueDates.length > 0 ? uniqueDates.map(dateStr => (
-                                    <th key={dateStr} className="p-2 text-center text-xs border-b border-white/10 min-w-[60px] whitespace-nowrap">
-                                        {formatDateHeader(dateStr)}
-                                    </th>
-                                )) : (
-                                    <th className="p-4 border-b border-white/10 text-gray-500 italic font-normal">Belum ada data</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/10 text-gray-300">
-                            {pengurus.length > 0 ? pengurus.map((p, idx) => (
-                                <tr key={`${p.niup}-${idx}`} className="hover:bg-white/5">
-                                    <td className="p-4 border-b border-white/10 sticky left-0 bg-[#16162c] z-10 border-r shadow-lg font-medium text-white truncate max-w-[200px]">
-                                        {p.nama}
-                                    </td>
-                                    {uniqueDates.length > 0 ? uniqueDates.map(dateStr => {
-                                        const record = filteredRaw.find(r => r.niup === p.niup && r.tanggal === dateStr);
-                                        const status = record ? record.status : 'Alpha'; 
-                                        return (
-                                            <td 
-                                                key={dateStr} 
-                                                onClick={() => handleCellClick(p, dateStr)}
-                                                className="p-2 border-b border-white/10 text-center cursor-pointer hover:bg-white/10 transition-colors"
-                                                title="Klik untuk edit"
-                                            >
-                                                <Badge status={status} mini={true} />
-                                            </td>
-                                        );
-                                    }) : (
-                                        <td className="p-4 border-b border-white/10"></td>
-                                    )}
-                                </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan={uniqueDates.length + 1} className="p-8 text-center text-gray-500">
-                                        Data pengurus kosong.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
-
-            <Modal isOpen={!!editData} onClose={() => setEditData(null)} title="Edit Data Absensi">
-                {editData && (
-                    <div className="space-y-4">
-                        <div className="bg-white/5 p-3 rounded-lg border border-white/10 text-sm space-y-1">
-                            <p className="text-gray-400">Nama: <span className="text-white font-bold">{editData.nama}</span></p>
-                            <p className="text-gray-400">Tanggal: <span className="text-white">{editData.tanggal}</span></p>
-                            <p className="text-gray-400">Shift: <span className="text-white">{editData.shift}</span></p>
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-[#1a1a2e] border border-white/20 rounded-2xl w-full max-w-md p-6 relative shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-white">{title}</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                                <X size={24} />
+                            </button>
                         </div>
+                        {children}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- NEW: FULL SCREEN LOADING COMPONENT ---
+        const LoadingScreen = () => (
+            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0f0c29] text-white">
+                <div className="w-20 h-20 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-pulse-slow mb-6">
+                    <CalendarDays size={40} className="text-white" />
+                </div>
+                <h1 className="text-2xl font-bold tracking-wider mb-2">ABSEN BIKTREN</h1>
+                <div className="flex items-center gap-2 text-indigo-300 text-sm">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Memuat data aplikasi...</span>
+                </div>
+            </div>
+        );
+
+        // --- INITIAL CONFIG ---
+        const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwdRcretj2IgsFPOdLaVorx9j53QseaFcJ4UTRWBYTnSzmpW4mCLTAgXpdSv0Ruxb9J/exec";
+
+        // --- HELPERS ---
+        const getWIBDateString = () => {
+            return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+        };
+
+        // --- MOCK DATA ---
+        const MOCK_PENGURUS = [
+            { id: 1, niup: '2026001', nama: 'Ust. Ahmad Zaini', jabatan: 'Kepala Biro' },
+            { id: 2, niup: '2026002', nama: 'Ust. Faisal Reza', jabatan: 'Sekretaris' },
+        ];
+
+        const MOCK_ABSENSI = [
+            { id: 1, tanggal: '2026-01-01', niup: '2026001', nama: 'Ust. Ahmad Zaini', status: 'Hadir', shift: 'Pagi', keterangan: '' },
+        ];
+
+        // --- MAIN APP ---
+        function App() {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            
+            // Data State
+            const [pengurus, setPengurus] = useState(MOCK_PENGURUS);
+            const [absensi, setAbsensi] = useState(MOCK_ABSENSI);
+            const [dataLibur, setDataLibur] = useState([]);
+            const [jadwalSore, setJadwalSore] = useState({}); 
+            const [isLoading, setIsLoading] = useState(true); // Default true for Initial Loading
+            
+            // Settings State
+            const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
+            const [connectionStatus, setConnectionStatus] = useState('idle');
+            const [lastSync, setLastSync] = useState(null);
+
+            // --- LOGIC ---
+            const todayStr = getWIBDateString();
+            const todayDate = new Date();
+            const isFriday = todayDate.getDay() === 5;
+
+            const fetchData = async () => {
+                if (!apiUrl) {
+                    setIsLoading(false);
+                    return;
+                }
+                
+                setIsLoading(true); // Start Loading
+                setConnectionStatus('testing');
+                
+                try {
+                    const [resPengurus, resAbsensi, resLibur, resJadwal] = await Promise.all([
+                        fetch(`${apiUrl}?action=getPengurus`),
+                        fetch(`${apiUrl}?action=getAbsensi`),
+                        fetch(`${apiUrl}?action=getLibur`),
+                        fetch(`${apiUrl}?action=getJadwalSore`)
+                    ]);
+
+                    const dataPengurus = await resPengurus.json();
+                    const dataAbsensi = await resAbsensi.json();
+                    const dataLiburRes = await resLibur.json();
+                    const dataJadwalRes = await resJadwal.json();
+                    
+                    if (dataPengurus.status === 'success') {
+                        setPengurus(dataPengurus.data);
+                        setConnectionStatus('success');
+                    }
+
+                    if (dataAbsensi.status === 'success') setAbsensi(dataAbsensi.data);
+                    if (dataLiburRes.status === 'success') setDataLibur(dataLiburRes.data);
+                    if (dataJadwalRes.status === 'success') {
+                        const mapJadwal = {};
+                        dataJadwalRes.data.forEach(item => {
+                            try {
+                                mapJadwal[item.hari] = JSON.parse(item.petugas);
+                            } catch(e) {
+                                mapJadwal[item.hari] = [];
+                            }
+                        });
+                        setJadwalSore(mapJadwal);
+                    }
+
+                    setLastSync(new Date());
+
+                } catch (error) {
+                    console.error("Connection failed", error);
+                    setConnectionStatus('error');
+                } finally {
+                    // Minimal delay to show animation (optional, but good UX)
+                    setTimeout(() => {
+                        setIsLoading(false);
+                    }, 1000);
+                }
+            };
+
+            useEffect(() => {
+                fetchData();
+            }, []);
+
+            // Statistik Dashboard
+            const stats = useMemo(() => {
+                const totalPengurus = pengurus.length;
+                const isLiburManual = dataLibur.some(l => l.tanggal === todayStr);
+                const todayAbsensi = absensi.filter(a => a.tanggal === todayStr);
+                const hadirHariIni = todayAbsensi.filter(a => a.status === 'Hadir').length;
+                const attendanceRate = totalPengurus > 0 ? Math.round((hadirHariIni / totalPengurus) * 100) : 0;
+                
+                return {
+                    total: totalPengurus,
+                    hadir: hadirHariIni,
+                    rate: attendanceRate,
+                    sakit: todayAbsensi.filter(a => a.status === 'Sakit').length,
+                    izin: todayAbsensi.filter(a => a.status === 'Izin').length,
+                    statusHariIni: isFriday || isLiburManual ? 'Libur' : 'Masuk'
+                };
+            }, [pengurus, absensi, dataLibur, todayStr, isFriday]);
+
+            // --- MENU CONFIG ---
+            const menuItems = [
+                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                { id: 'pengurus', label: 'Data Pengurus', icon: Users },
+                { id: 'absensi', label: 'Absensi', icon: CalendarCheck },
+                { id: 'rekap', label: 'Rekapitulasi', icon: FileText },
+                { id: 'jadwal', label: 'Kantor Sore', icon: Moon },
+                { id: 'libur', label: 'Data Libur', icon: CalendarOff },
+                { id: 'settings', label: 'Pengaturan', icon: Settings },
+            ];
+
+            // --- VIEWS ---
+
+            const DashboardView = () => (
+                <div className="space-y-6 animate-fade-in">
+                    {connectionStatus === 'error' && (
+                        <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center gap-3">
+                            <WifiOff size={20} />
+                            <span>Koneksi ke Google Sheet gagal. Menggunakan data lokal. Cek menu Pengaturan.</span>
+                        </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <Card className="p-6 bg-gradient-to-br from-indigo-500/20 to-purple-500/20">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-indigo-200 text-sm font-medium">Total Pengurus</p>
+                                    <h3 className="text-4xl font-bold text-white mt-2">{stats.total}</h3>
+                                </div>
+                                <div className="p-3 bg-indigo-500/30 rounded-lg text-white">
+                                    <Users size={24} />
+                                </div>
+                            </div>
+                        </Card>
                         
-                        <div>
-                            <label className="text-xs text-gray-400 mb-2 block">Status Kehadiran</label>
-                            <div className="grid grid-cols-2 gap-3">
-                                {['Hadir', 'Sakit', 'Izin', 'Alpha'].map(s => (
-                                    <button
-                                        key={s}
-                                        onClick={() => setEditData({...editData, status: s})}
-                                        className={`py-2 rounded-lg text-sm border transition-all ${editData.status === s 
-                                            ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' 
-                                            : 'bg-white/5 border-transparent text-gray-400 hover:bg-white/10'}`}
-                                    >
-                                        {s}
-                                    </button>
-                                ))}
+                        <Card className="p-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-emerald-200 text-sm font-medium">Hadir Hari Ini</p>
+                                    <h3 className="text-4xl font-bold text-white mt-2">{stats.hadir}</h3>
+                                </div>
+                                <div className="p-3 bg-emerald-500/30 rounded-lg text-white">
+                                    <CheckCircle2 size={24} />
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card className="p-6 bg-gradient-to-br from-pink-500/20 to-rose-500/20">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-pink-200 text-sm font-medium">Kehadiran (%)</p>
+                                    <h3 className="text-4xl font-bold text-white mt-2">{stats.rate}%</h3>
+                                </div>
+                                <div className="p-3 bg-pink-500/30 rounded-lg text-white">
+                                    <LayoutDashboard size={24} />
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card className="p-6 bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-amber-200 text-sm font-medium">Sakit / Izin</p>
+                                    <h3 className="text-4xl font-bold text-white mt-2">{stats.sakit + stats.izin}</h3>
+                                </div>
+                                <div className="p-3 bg-amber-500/30 rounded-lg text-white">
+                                    <AlertCircle size={24} />
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card className="p-6 min-h-[300px]">
+                            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                <CalendarCheck className="text-indigo-400" /> Status Hari Ini
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                                    <span className="text-gray-300">Hari</span>
+                                    <span className="font-bold text-white">{new Date().toLocaleDateString('id-ID', { weekday: 'long' })}</span>
+                                </div>
+                                <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                                    <span className="text-gray-300">Status Operasional</span>
+                                    {stats.statusHariIni === 'Libur' ? (
+                                        <span className="text-red-400 font-bold flex items-center gap-2"><Coffee size={18}/> LIBUR (Jum'at / Tgl Merah)</span>
+                                    ) : (
+                                        <span className="text-emerald-400 font-bold flex items-center gap-2"><Sun size={18}/> Buka Normal</span>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+                        
+                        <Card className="p-6">
+                            <h3 className="text-xl font-bold text-white mb-4">Agenda Libur Terdekat</h3>
+                            <div className="space-y-3">
+                                {dataLibur.length > 0 ? dataLibur.map((l, i) => (
+                                    <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+                                        <span className="text-red-300 font-medium">{l.tanggal}</span>
+                                        <span className="text-gray-300 text-sm">{l.keterangan}</span>
+                                    </div>
+                                )) : (
+                                    <p className="text-gray-500 text-sm">Tidak ada data libur.</p>
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                </div>
+            );
+
+            const AbsensiView = () => {
+                const [selectedDate, setSelectedDate] = useState(getWIBDateString());
+                const [selectedShift, setSelectedShift] = useState('Pagi');
+                const isTodayFriday = new Date(selectedDate).getDay() === 5;
+                const isTodayLibur = dataLibur.some(l => l.tanggal === selectedDate);
+
+                const [statusMap, setStatusMap] = useState({});
+                const [ketMap, setKetMap] = useState({});
+                const [isSubmitting, setIsSubmitting] = useState(false);
+
+                // LOGIC: Filter pengurus berdasarkan Jadwal Kantor Sore
+                const pendingPengurus = useMemo(() => {
+                    const days = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                    const dayIndex = new Date(selectedDate).getDay(); 
+                    const dayName = days[dayIndex];
+
+                    const jadwalHariIni = jadwalSore[dayName] || [];
+                    const soreNiups = jadwalHariIni.map(p => p.niup);
+
+                    let targetList = [];
+                    if (selectedShift === 'Sore') {
+                        targetList = pengurus.filter(p => soreNiups.includes(p.niup));
+                    } else {
+                        targetList = pengurus.filter(p => !soreNiups.includes(p.niup));
+                    }
+
+                    return targetList.filter(p => {
+                        const alreadyRecorded = absensi.some(
+                            log => log.niup === p.niup && log.tanggal === selectedDate && log.shift === selectedShift
+                        );
+                        return !alreadyRecorded;
+                    });
+                }, [pengurus, absensi, selectedDate, selectedShift, jadwalSore]);
+
+                const handleAbsenChange = (niup, status) => {
+                    setStatusMap(prev => ({ ...prev, [niup]: status }));
+                };
+
+                const handleKetChange = (niup, ket) => {
+                    setKetMap(prev => ({ ...prev, [niup]: ket }));
+                };
+
+                const handleSubmit = async () => {
+                    if (Object.keys(statusMap).length === 0) {
+                        return alert("Pilih minimal satu status kehadiran.");
+                    }
+                    
+                    setIsSubmitting(true);
+                    const records = Object.keys(statusMap).map(niup => {
+                        const p = pengurus.find(item => item.niup === niup);
+                        return {
+                            niup: niup,
+                            nama: (p && p.nama) ? p.nama : 'Unknown', 
+                            status: statusMap[niup],
+                            shift: selectedShift,
+                            keterangan: ketMap[niup] || ''
+                        };
+                    });
+
+                    const payload = { tanggal: selectedDate, records: records };
+
+                    try {
+                        const response = await fetch(`${apiUrl}?action=submitAbsensi`, {
+                            method: 'POST',
+                            body: JSON.stringify(payload)
+                        });
+                        const result = await response.json();
+                        if (result.status === 'success') {
+                            alert('Absensi berhasil disimpan!');
+                            setStatusMap({});
+                            setKetMap({});
+                            fetchData();
+                        } else {
+                            alert('Gagal: ' + result.message);
+                        }
+                    } catch (e) { alert('Error koneksi.'); }
+                    setIsSubmitting(false);
+                };
+
+                return (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                                <h2 className="text-2xl font-bold text-white">Input Absensi Harian</h2>
+                                <div className="flex gap-3">
+                                    <div className="bg-white/5 p-1 rounded-lg border border-white/10">
+                                        <select 
+                                            value={selectedShift}
+                                            onChange={(e) => setSelectedShift(e.target.value)}
+                                            className="bg-transparent text-white px-3 py-1 outline-none font-medium cursor-pointer"
+                                        >
+                                            <option value="Pagi" className="bg-[#1a1a2e]">Shift Pagi</option>
+                                            <option value="Sore" className="bg-[#1a1a2e]">Shift Sore</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
+                                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-transparent text-white px-3 py-1 outline-none"/>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-indigo-900/30 border border-indigo-500/30 p-3 rounded-lg flex items-center gap-3 text-sm text-indigo-200">
+                                <Clock size={16} />
+                                <span>
+                                Menampilkan <b>{selectedShift === 'Pagi' ? 'Pengurus Reguler' : 'Petugas Jadwal Sore'}</b> yang belum absen tanggal <b>{selectedDate}</b>.
+                                </span>
                             </div>
                         </div>
 
-                        <div>
-                            <label className="text-xs text-gray-400 mb-2 block">Keterangan</label>
-                            <input 
-                                type="text" 
-                                value={editData.keterangan}
-                                onChange={(e) => setEditData({...editData, keterangan: e.target.value})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm"
-                                placeholder="Tambahkan catatan..."
-                            />
-                        </div>
+                        {isTodayFriday || isTodayLibur ? (
+                            <div className="p-8 text-center border-2 border-dashed border-white/10 rounded-2xl bg-white/5">
+                                <Coffee className="mx-auto text-yellow-400 mb-4" size={48} />
+                                <h3 className="text-xl font-bold text-white">Hari Ini Libur</h3>
+                                <p className="text-gray-400 mt-2">{isTodayFriday ? "Hari Jum'at" : "Tanggal Merah Tercatat"}. Absensi ditiadakan.</p>
+                            </div>
+                        ) : (
+                            <Card className="overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-black/20 text-indigo-200">
+                                            <tr>
+                                                <th className="p-4">Nama Pengurus</th>
+                                                <th className="p-4 text-center">Kehadiran</th>
+                                                <th className="p-4">Keterangan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/10 text-gray-300">
+                                            {pendingPengurus.length > 0 ? pendingPengurus.map((p, idx) => (
+                                                <tr key={`${p.niup}-${idx}`} className="hover:bg-white/5 transition-colors">
+                                                    <td className="p-4">
+                                                        <div className="font-medium text-white">{p.nama}</div>
+                                                        <div className="text-xs text-gray-500">{p.jabatan}</div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="flex justify-center gap-4">
+                                                            {['Hadir', 'Sakit', 'Izin', 'Alpha'].map((status) => (
+                                                                <label key={status} className="flex flex-col items-center cursor-pointer group">
+                                                                    <input 
+                                                                    type="radio" 
+                                                                    name={`status-${p.niup}`} 
+                                                                    onChange={() => handleAbsenChange(p.niup, status)}
+                                                                    checked={statusMap[p.niup] === status}
+                                                                    className={`w-5 h-5 appearance-none rounded-full border-2 border-white/20 checked:border-transparent transition-all mb-1
+                                                                        ${status === 'Hadir' ? 'checked:bg-emerald-500' : ''}
+                                                                        ${status === 'Sakit' ? 'checked:bg-yellow-500' : ''}
+                                                                        ${status === 'Izin' ? 'checked:bg-blue-500' : ''}
+                                                                        ${status === 'Alpha' ? 'checked:bg-red-500' : ''}
+                                                                    `}
+                                                                    />
+                                                                    <span className={`text-[10px] group-hover:text-white transition-colors ${statusMap[p.niup] === status ? 'text-white font-bold' : 'text-gray-500'}`}>{status}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="Catatan (Opsional)..." 
+                                                            value={ketMap[p.niup] || ''}
+                                                            onChange={(e) => handleKetChange(p.niup, e.target.value)}
+                                                            className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white w-full focus:border-indigo-500 outline-none transition-colors" 
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            )) : (
+                                                <tr>
+                                                    <td colSpan="3" className="p-12 text-center text-gray-400">
+                                                        <CheckCircle2 size={48} className="mx-auto text-emerald-500/50 mb-3"/>
+                                                        <p className="font-medium text-white">
+                                                            {selectedShift === 'Sore' ? 'Tidak ada petugas sore yang belum absen.' : 'Semua pengurus reguler sudah diabsen!'}
+                                                        </p>
+                                                        {selectedShift === 'Sore' && <p className="text-xs mt-1">Pastikan jadwal sore sudah diisi di menu Kantor Sore.</p>}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {pendingPengurus.length > 0 && (
+                                    <div className="p-4 border-t border-white/10 flex justify-end">
+                                        <button 
+                                            onClick={handleSubmit}
+                                            disabled={isSubmitting}
+                                            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
+                                            {isSubmitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18} />} 
+                                            {isSubmitting ? 'Menyimpan...' : 'Simpan Absensi'}
+                                        </button>
+                                    </div>
+                                )}
+                            </Card>
+                        )}
+                    </div>
+                );
+            };
 
-                        <div className="pt-4 flex gap-3">
-                            <button onClick={() => setEditData(null)} className="flex-1 py-2 text-gray-400 hover:text-white transition-colors">Batal</button>
-                            <button 
-                                onClick={handleSaveEdit} 
-                                disabled={isSavingEdit}
-                                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-2">
-                                {isSavingEdit ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Simpan Perubahan
+            const RekapView = () => {
+                const [filterTahun, setFilterTahun] = useState(new Date().getFullYear());
+                const [filterBulan, setFilterBulan] = useState(new Date().getMonth());
+                const [filterShift, setFilterShift] = useState('Pagi');
+                const [filterTanggal, setFilterTanggal] = useState('');
+                
+                const [editData, setEditData] = useState(null);
+                const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+                const filteredRaw = useMemo(() => {
+                    return absensi.filter(item => {
+                        const date = new Date(item.tanggal);
+                        const itemYear = date.getFullYear();
+                        const itemMonth = date.getMonth();
+                        const itemDateStr = item.tanggal; 
+
+                        if (item.shift !== filterShift) return false;
+
+                        if (filterTanggal) {
+                            return itemDateStr === filterTanggal;
+                        }
+
+                        let match = itemYear === parseInt(filterTahun) && itemMonth === parseInt(filterBulan);
+                        return match;
+                    });
+                }, [absensi, filterTahun, filterBulan, filterShift, filterTanggal]);
+
+                const uniqueDates = useMemo(() => {
+                    const dates = new Set(filteredRaw.map(item => item.tanggal));
+                    return Array.from(dates).sort();
+                }, [filteredRaw]);
+
+                const formatDateHeader = (dateStr) => {
+                    const [y, m, d] = dateStr.split('-');
+                    return `${d}/${m}`;
+                };
+
+                const handleCellClick = (p, dateStr) => {
+                    const record = filteredRaw.find(r => r.niup === p.niup && r.tanggal === dateStr);
+                    setEditData({
+                        niup: p.niup,
+                        nama: p.nama,
+                        tanggal: dateStr,
+                        shift: filterShift,
+                        status: record ? record.status : 'Alpha',
+                        keterangan: record ? (record.keterangan || '') : ''
+                    });
+                };
+
+                const handleSaveEdit = async () => {
+                    if (!editData) return;
+                    setIsSavingEdit(true);
+                    const payload = {
+                        tanggal: editData.tanggal,
+                        records: [{
+                            niup: editData.niup,
+                            nama: editData.nama,
+                            status: editData.status,
+                            shift: editData.shift,
+                            keterangan: editData.keterangan
+                        }]
+                    };
+
+                    try {
+                        const response = await fetch(`${apiUrl}?action=submitAbsensi`, {
+                            method: 'POST',
+                            body: JSON.stringify(payload)
+                        });
+                        await response.json();
+                        alert('Data berhasil diperbarui!');
+                        fetchData();
+                        setEditData(null);
+                    } catch(e) { alert('Gagal update data'); }
+                    setIsSavingEdit(false);
+                };
+
+                return (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="bg-gradient-to-r from-blue-900/50 to-cyan-900/50 p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                                    <FileText className="text-cyan-300" /> Rekapitulasi Absensi
+                                </h2>
+                                <p className="text-cyan-200 text-sm">Klik pada kotak status untuk mengedit data.</p>
+                            </div>
+                            <button className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition-all">
+                                <Download size={16} /> Export CSV
                             </button>
                         </div>
+
+                        <Card className="p-4">
+                            <div className="flex flex-col md:flex-row gap-4 items-end">
+                                <div className="flex-1 w-full">
+                                    <label className="text-xs text-gray-400 mb-1 block">Shift</label>
+                                    <select 
+                                        value={filterShift}
+                                        onChange={(e) => setFilterShift(e.target.value)}
+                                        className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+                                    >
+                                        <option value="Pagi">Pagi</option>
+                                        <option value="Sore">Sore</option>
+                                    </select>
+                                </div>
+                                <div className="flex-1 w-full">
+                                    <label className="text-xs text-gray-400 mb-1 block">Bulan</label>
+                                    <select 
+                                        value={filterBulan}
+                                        onChange={(e) => setFilterBulan(e.target.value)}
+                                        disabled={!!filterTanggal}
+                                        className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm disabled:opacity-50"
+                                    >
+                                        {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((m, i) => (
+                                            <option key={i} value={i}>{m}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex-1 w-full">
+                                    <label className="text-xs text-gray-400 mb-1 block">Tahun</label>
+                                    <select 
+                                        value={filterTahun}
+                                        onChange={(e) => setFilterTahun(e.target.value)}
+                                        className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+                                    >
+                                        <option value="2025">2025</option>
+                                        <option value="2026">2026</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card className="overflow-hidden">
+                            <div className="overflow-x-auto custom-scrollbar pb-2">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-black/20 text-cyan-200">
+                                        <tr>
+                                            <th className="p-4 border-b border-white/10 sticky left-0 bg-[#16162c] z-10 w-48 shadow-lg border-r">Nama Pengurus</th>
+                                            {uniqueDates.length > 0 ? uniqueDates.map(dateStr => (
+                                                <th key={dateStr} className="p-2 text-center text-xs border-b border-white/10 min-w-[60px] whitespace-nowrap">
+                                                    {formatDateHeader(dateStr)}
+                                                </th>
+                                            )) : (
+                                                <th className="p-4 border-b border-white/10 text-gray-500 italic font-normal">Belum ada data</th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/10 text-gray-300">
+                                        {pengurus.length > 0 ? pengurus.map((p, idx) => (
+                                            <tr key={`${p.niup}-${idx}`} className="hover:bg-white/5">
+                                                <td className="p-4 border-b border-white/10 sticky left-0 bg-[#16162c] z-10 border-r shadow-lg font-medium text-white truncate max-w-[200px]">
+                                                    {p.nama}
+                                                </td>
+                                                {uniqueDates.length > 0 ? uniqueDates.map(dateStr => {
+                                                    const record = filteredRaw.find(r => r.niup === p.niup && r.tanggal === dateStr);
+                                                    const status = record ? record.status : 'Alpha'; 
+                                                    return (
+                                                        <td 
+                                                            key={dateStr} 
+                                                            onClick={() => handleCellClick(p, dateStr)}
+                                                            className="p-2 border-b border-white/10 text-center cursor-pointer hover:bg-white/10 transition-colors"
+                                                            title="Klik untuk edit"
+                                                        >
+                                                            <Badge status={status} mini={true} />
+                                                        </td>
+                                                    );
+                                                }) : (
+                                                    <td className="p-4 border-b border-white/10"></td>
+                                                )}
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={uniqueDates.length + 1} className="p-8 text-center text-gray-500">
+                                                    Data pengurus kosong.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+
+                        <Modal isOpen={!!editData} onClose={() => setEditData(null)} title="Edit Data Absensi">
+                            {editData && (
+                                <div className="space-y-4">
+                                    <div className="bg-white/5 p-3 rounded-lg border border-white/10 text-sm space-y-1">
+                                        <p className="text-gray-400">Nama: <span className="text-white font-bold">{editData.nama}</span></p>
+                                        <p className="text-gray-400">Tanggal: <span className="text-white">{editData.tanggal}</span></p>
+                                        <p className="text-gray-400">Shift: <span className="text-white">{editData.shift}</span></p>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="text-xs text-gray-400 mb-2 block">Status Kehadiran</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {['Hadir', 'Sakit', 'Izin', 'Alpha'].map(s => (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => setEditData({...editData, status: s})}
+                                                    className={`py-2 rounded-lg text-sm border transition-all ${editData.status === s 
+                                                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' 
+                                                        : 'bg-white/5 border-transparent text-gray-400 hover:bg-white/10'}`}
+                                                >
+                                                    {s}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs text-gray-400 mb-2 block">Keterangan</label>
+                                        <input 
+                                            type="text" 
+                                            value={editData.keterangan}
+                                            onChange={(e) => setEditData({...editData, keterangan: e.target.value})}
+                                            className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm"
+                                            placeholder="Tambahkan catatan..."
+                                        />
+                                    </div>
+
+                                    <div className="pt-4 flex gap-3">
+                                        <button onClick={() => setEditData(null)} className="flex-1 py-2 text-gray-400 hover:text-white transition-colors">Batal</button>
+                                        <button 
+                                            onClick={handleSaveEdit} 
+                                            disabled={isSavingEdit}
+                                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-2">
+                                            {isSavingEdit ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Simpan Perubahan
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </Modal>
                     </div>
-                )}
-            </Modal>
-        </div>
-    );
-  };
+                );
+            };
 
-  const DataPengurusView = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">Data Pengurus Biro</h2>
-        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20">
-          <Plus size={18} /> Tambah
-        </button>
-      </div>
-      
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-black/20 text-indigo-200">
-              <tr>
-                <th className="p-4">NIUP</th>
-                <th className="p-4">Nama Lengkap</th>
-                <th className="p-4">Jabatan</th>
-                <th className="p-4">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 text-gray-300">
-              {pengurus.length > 0 ? pengurus.map((p, idx) => (
-                <tr key={idx} className="hover:bg-white/5 transition-colors">
-                  <td className="p-4 font-mono text-sm">{p.niup}</td>
-                  <td className="p-4 font-medium text-white">{p.nama}</td>
-                  <td className="p-4">
-                    <span className="px-2 py-1 bg-white/10 rounded-md text-xs border border-white/10">
-                      {p.jabatan}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <button className="text-red-400 hover:text-red-300 transition-colors">
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              )) : (
-                 <tr>
-                    <td colSpan="4" className="p-8 text-center text-gray-500">
-                        {isLoading ? 'Memuat data...' : 'Tidak ada data pengurus.'}
-                    </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-
-  const DataLiburView = () => {
-    const [tglLibur, setTglLibur] = useState('');
-    const [ketLibur, setKetLibur] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-
-    const handleAddLibur = async () => {
-        if (!tglLibur || !ketLibur) return alert("Lengkapi data!");
-        setIsSaving(true);
-        try {
-            await fetch(`${apiUrl}?action=addLibur`, {
-                method: 'POST',
-                body: JSON.stringify({ tanggal: tglLibur, keterangan: ketLibur })
-            });
-            setTglLibur(''); setKetLibur('');
-            fetchData();
-        } catch(e) { alert("Gagal menyimpan"); }
-        setIsSaving(false);
-    };
-
-    const handleDeleteLibur = async (tanggal) => {
-        if(!confirm("Hapus libur ini?")) return;
-        try {
-            await fetch(`${apiUrl}?action=deleteLibur`, {
-                method: 'POST',
-                body: JSON.stringify({ tanggal })
-            });
-            fetchData();
-        } catch(e) { alert("Gagal menghapus"); }
-    };
-
-    return (
-        <div className="space-y-6 animate-fade-in">
-            <h2 className="text-2xl font-bold text-white">Manajemen Hari Libur</h2>
-            <Card className="p-6">
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                        <label className="text-gray-400 text-sm mb-1 block">Tanggal Libur</label>
-                        <input type="date" value={tglLibur} onChange={e=>setTglLibur(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white"/>
-                    </div>
-                    <div className="flex-[2] w-full">
-                         <label className="text-gray-400 text-sm mb-1 block">Keterangan</label>
-                         <input type="text" placeholder="Contoh: Maulid Nabi" value={ketLibur} onChange={e=>setKetLibur(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white"/>
-                    </div>
-                    <button onClick={handleAddLibur} disabled={isSaving} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg disabled:opacity-50">
-                        {isSaving ? '...' : 'Tambah Libur'}
-                    </button>
-                </div>
-            </Card>
-            <Card className="overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-black/20 text-red-200">
-                        <tr>
-                            <th className="p-4">Tanggal</th>
-                            <th className="p-4">Keterangan</th>
-                            <th className="p-4 text-right">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10 text-gray-300">
-                        {dataLibur.map((l, i) => (
-                            <tr key={i} className="hover:bg-white/5">
-                                <td className="p-4 font-mono">{l.tanggal}</td>
-                                <td className="p-4">{l.keterangan}</td>
-                                <td className="p-4 text-right">
-                                    <button onClick={() => handleDeleteLibur(l.tanggal)} className="text-red-400 hover:text-red-300"><Trash2 size={18}/></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </Card>
-        </div>
-    );
-  };
-
-  const JadwalSoreView = () => {
-    const [editingDay, setEditingDay] = useState(null); 
-    const [tempPetugas, setTempPetugas] = useState([]); 
-    const [isSaving, setIsSaving] = useState(false);
-
-    const openEdit = (hari) => {
-        setEditingDay(hari);
-        setTempPetugas(jadwalSore[hari] || []);
-    };
-
-    const togglePetugas = (p) => {
-        const exists = tempPetugas.some(tp => tp.niup === p.niup);
-        if (exists) {
-            setTempPetugas(tempPetugas.filter(tp => tp.niup !== p.niup));
-        } else {
-            setTempPetugas([...tempPetugas, { niup: p.niup, nama: p.nama }]);
-        }
-    };
-
-    const saveJadwal = async () => {
-        setIsSaving(true);
-        const payload = { hari: editingDay, petugas: tempPetugas };
-        try {
-            await fetch(`${apiUrl}?action=saveJadwalSore`, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            setJadwalSore(prev => ({ ...prev, [editingDay]: tempPetugas }));
-            setEditingDay(null);
-        } catch(e) { alert("Gagal menyimpan jadwal"); }
-        setIsSaving(false);
-    };
-
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="bg-gradient-to-r from-purple-900/50 to-indigo-900/50 p-6 rounded-2xl border border-white/10">
-          <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
-            <Moon className="text-indigo-300" /> Jadwal Kantor Sore
-          </h2>
-          <p className="text-indigo-200">Shift Khusus: 16.00 – 22.00 WIB</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {['Sabtu', 'Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis'].map((hari) => {
-            const petugasHariIni = jadwalSore[hari] || [];
-            return (
-              <Card key={hari} className="p-5 hover:border-indigo-500/50 transition-colors group relative">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold text-white">{hari}</h3>
-                  <span className="text-xs font-mono text-gray-400 bg-white/5 px-2 py-1 rounded">16:00 - 22:00</span>
-                </div>
-                <div className="space-y-2 min-h-[80px]">
-                  {petugasHariIni.length > 0 ? petugasHariIni.map((p, idx) => (
-                    <div key={idx} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center text-xs text-indigo-200 font-bold">
-                        {p.nama ? p.nama.substring(0,2) : '??'}
-                      </div>
-                      <span className="text-sm text-gray-300">{p.nama}</span>
-                    </div>
-                  )) : (
-                     <p className="text-xs text-gray-500 italic">Belum ada petugas.</p>
-                  )}
-                </div>
-                <button 
-                  onClick={() => openEdit(hari)}
-                  className="w-full mt-4 py-2 flex items-center justify-center gap-2 border border-dashed border-white/20 text-gray-400 text-xs rounded-lg hover:bg-white/5 transition-colors group-hover:border-indigo-500/30 group-hover:text-indigo-300">
-                  <Edit3 size={14}/> Edit Petugas
-                </button>
-              </Card>
-            );
-          })}
-        </div>
-
-        <Modal isOpen={!!editingDay} onClose={() => setEditingDay(null)} title={`Edit Jadwal: ${editingDay}`}>
-            <div className="max-h-[300px] overflow-y-auto space-y-2 mb-4 pr-2 custom-scrollbar">
-                {pengurus.map((p, idx) => {
-                    const isSelected = tempPetugas.some(tp => tp.niup === p.niup);
-                    return (
-                        <div key={`${p.niup}-${idx}`} 
-                             onClick={() => togglePetugas(p)}
-                             className={`p-3 rounded-lg cursor-pointer flex items-center justify-between transition-all ${isSelected ? 'bg-indigo-600/30 border border-indigo-500' : 'bg-white/5 border border-transparent hover:bg-white/10'}`}>
-                            <span className="text-sm text-white">{p.nama}</span>
-                            {isSelected && <CheckCircle2 size={16} className="text-indigo-400"/>}
-                        </div>
-                    );
-                })}
-            </div>
-            <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
-                <button onClick={() => setEditingDay(null)} className="px-4 py-2 text-sm text-gray-400 hover:text-white">Batal</button>
-                <button onClick={saveJadwal} disabled={isSaving} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm flex items-center gap-2">
-                    {isSaving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} Simpan
-                </button>
-            </div>
-        </Modal>
-      </div>
-    );
-  };
-
-  const SettingsView = () => (
-    <div className="space-y-6 animate-fade-in">
-        <h2 className="text-2xl font-bold text-white">Pengaturan</h2>
-        <Card className="p-6">
-            <h3 className="text-lg font-bold text-white mb-4">Database</h3>
-            <input type="text" value={apiUrl} onChange={e => setApiUrl(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm" placeholder="URL Apps Script"/>
-            <button onClick={fetchData} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg">Test Connection</button>
-        </Card>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-[#0f0c29] text-gray-100 font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Dynamic Background */}
-      <div className="fixed inset-0 z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
-      </div>
-
-      <div className="relative z-10 flex min-h-screen pb-24 lg:pb-0">
-        {/* DESKTOP SIDEBAR */}
-        <aside className={`hidden lg:flex fixed lg:sticky top-0 h-screen ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-black/40 backdrop-blur-xl border-r border-white/10 transition-all duration-300 z-50 flex-col`}>
-          <div className="p-6 flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-              <CalendarDays className="text-white" size={24} />
-            </div>
-            {!isSidebarCollapsed && (
-              <div className="overflow-hidden whitespace-nowrap animate-fade-in">
-                <h1 className="font-bold text-white leading-tight">ABSEN</h1>
-                <p className="text-xs text-indigo-300">BIKTREN</p>
-              </div>
-            )}
-          </div>
-
-          <nav className="flex-1 px-4 space-y-2">
-            {menuItems.map((item) => (
-               <button 
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  title={isSidebarCollapsed ? item.label : ''}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative
-                    ${activeTab === item.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-400 hover:bg-white/5 hover:text-white'}
-                    ${isSidebarCollapsed ? 'justify-center' : ''}
-                  `}
-                >
-                  <item.icon size={20} className="shrink-0" />
-                  {!isSidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
-               </button>
-            ))}
-          </nav>
-
-          <div className="p-4 border-t border-white/10 flex justify-end">
-             <button 
-              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 rounded-lg w-full flex justify-center"
-             >
-               {isSidebarCollapsed ? <ChevronRight size={20}/> : <ChevronLeft size={20}/>}
-             </button>
-          </div>
-        </aside>
-
-        {/* MOBILE BOTTOM NAV */}
-        <nav className="fixed bottom-0 left-0 w-full bg-[#0f0c29]/90 backdrop-blur-xl border-t border-white/10 z-50 lg:hidden px-4 py-3 flex justify-between items-center gap-2">
-             {menuItems.slice(0, 5).map((item) => { // Limit to 5 items for mobile space
-               const isActive = activeTab === item.id;
-               return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center justify-center rounded-xl transition-all duration-300 
-                    ${isActive 
-                       ? 'flex-grow bg-indigo-600/20 text-indigo-300 py-2 px-4 gap-2' 
-                       : 'w-10 h-10 text-gray-400 hover:text-white'
-                    }
-                  `}
-                >
-                  <item.icon size={20} className={`${isActive ? 'text-indigo-400 drop-shadow-[0_0_5px_rgba(129,140,248,0.5)]' : ''}`}/>
-                  {isActive && <span className="text-xs font-bold whitespace-nowrap animate-fade-in">{item.label}</span>}
-                </button>
-               )
-             })}
-             <button
-               onClick={() => setIsMobileMenuOpen(true)} // Open full menu modal if needed
-               className={`w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white`}
-             >
-                <Menu size={20}/>
-             </button>
-        </nav>
-
-         {/* Mobile Full Menu Overlay (For items not fitting in bottom bar) */}
-         {isMobileMenuOpen && (
-            <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex flex-col justify-end lg:hidden animate-fade-in">
-               <div className="bg-[#1a1a2e] rounded-t-2xl p-6 border-t border-white/10">
-                  <div className="flex justify-between items-center mb-6">
-                     <h3 className="text-xl font-bold text-white">Menu Lengkap</h3>
-                     <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400"><X size={24}/></button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                     {menuItems.map(item => (
-                        <button
-                          key={item.id}
-                          onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
-                          className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all
-                             ${activeTab === item.id ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300' : 'bg-white/5 border-transparent text-gray-400'}
-                          `}
-                        >
-                           <item.icon size={24} className="mb-2"/>
-                           <span className="text-sm">{item.label}</span>
+            const DataPengurusView = () => (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-white">Data Pengurus Biro</h2>
+                        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20">
+                            <Plus size={18} /> Tambah
                         </button>
-                     ))}
-                  </div>
-               </div>
-            </div>
-         )}
+                    </div>
+                    
+                    <Card className="overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-black/20 text-indigo-200">
+                                    <tr>
+                                        <th className="p-4">NIUP</th>
+                                        <th className="p-4">Nama Lengkap</th>
+                                        <th className="p-4">Jabatan</th>
+                                        <th className="p-4">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/10 text-gray-300">
+                                    {pengurus.length > 0 ? pengurus.map((p, idx) => (
+                                        <tr key={idx} className="hover:bg-white/5 transition-colors">
+                                            <td className="p-4 font-mono text-sm">{p.niup}</td>
+                                            <td className="p-4 font-medium text-white">{p.nama}</td>
+                                            <td className="p-4">
+                                                <span className="px-2 py-1 bg-white/10 rounded-md text-xs border border-white/10">
+                                                    {p.jabatan}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                <button className="text-red-400 hover:text-red-300 transition-colors">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan="4" className="p-8 text-center text-gray-500">
+                                                {isLoading ? 'Memuat data...' : 'Tidak ada data pengurus.'}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+                </div>
+            );
 
-        {/* MAIN CONTENT */}
-        <main className={`flex-1 p-4 lg:p-8 overflow-x-hidden transition-all duration-300`}>
-          {/* Header Mobile Title */}
-          <div className="lg:hidden flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
-                 <CalendarDays className="text-white" size={18} />
-              </div>
-              <span className="font-bold text-white text-lg">ABSEN BIKTREN</span>
-            </div>
-          </div>
+            const DataLiburView = () => {
+                const [tglLibur, setTglLibur] = useState('');
+                const [ketLibur, setKetLibur] = useState('');
+                const [isSaving, setIsSaving] = useState(false);
+                const [isDeleting, setIsDeleting] = useState(null); // Add deleting state for feedback
 
-          {activeTab === 'dashboard' && <DashboardView />}
-          {activeTab === 'pengurus' && <DataPengurusView />}
-          {activeTab === 'absensi' && <AbsensiView />}
-          {activeTab === 'rekap' && <RekapView />}
-          {activeTab === 'jadwal' && <JadwalSoreView />}
-          {activeTab === 'libur' && <DataLiburView />}
-          {activeTab === 'settings' && <SettingsView />}
-        </main>
-      </div>
-    </div>
-  );
-}
+                const handleAddLibur = async () => {
+                    if (!tglLibur || !ketLibur) return alert("Lengkapi data!");
+                    setIsSaving(true);
+                    try {
+                        await fetch(`${apiUrl}?action=addLibur`, {
+                            method: 'POST',
+                            body: JSON.stringify({ tanggal: tglLibur, keterangan: ketLibur })
+                        });
+                        setTglLibur(''); setKetLibur('');
+                        fetchData();
+                    } catch(e) { alert("Gagal menyimpan"); }
+                    setIsSaving(false);
+                };
+
+                const handleDeleteLibur = async (tanggal) => {
+                    if(!confirm("Hapus libur ini?")) return;
+                    setIsDeleting(tanggal); // Start loading state for specific item
+                    try {
+                        await fetch(`${apiUrl}?action=deleteLibur`, {
+                            method: 'POST',
+                            body: JSON.stringify({ tanggal })
+                        });
+                        fetchData();
+                    } catch(e) { alert("Gagal menghapus"); }
+                    setIsDeleting(null); // Stop loading
+                };
+
+                return (
+                    <div className="space-y-6 animate-fade-in">
+                        <h2 className="text-2xl font-bold text-white">Manajemen Hari Libur</h2>
+                        <Card className="p-6">
+                            <div className="flex flex-col md:flex-row gap-4 items-end">
+                                <div className="flex-1 w-full">
+                                    <label className="text-gray-400 text-sm mb-1 block">Tanggal Libur</label>
+                                    <input type="date" value={tglLibur} onChange={e=>setTglLibur(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white"/>
+                                </div>
+                                <div className="flex-[2] w-full">
+                                    <label className="text-gray-400 text-sm mb-1 block">Keterangan</label>
+                                    <input type="text" placeholder="Contoh: Maulid Nabi" value={ketLibur} onChange={e=>setKetLibur(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white"/>
+                                </div>
+                                <button onClick={handleAddLibur} disabled={isSaving} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg disabled:opacity-50 flex items-center justify-center gap-2">
+                                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16}/>}
+                                    {isSaving ? 'Menyimpan...' : 'Tambah Libur'}
+                                </button>
+                            </div>
+                        </Card>
+                        <Card className="overflow-hidden">
+                            <table className="w-full text-left">
+                                <thead className="bg-black/20 text-red-200">
+                                    <tr>
+                                        <th className="p-4">Tanggal</th>
+                                        <th className="p-4">Keterangan</th>
+                                        <th className="p-4 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/10 text-gray-300">
+                                    {dataLibur.map((l, i) => (
+                                        <tr key={i} className="hover:bg-white/5">
+                                            <td className="p-4 font-mono">{l.tanggal}</td>
+                                            <td className="p-4">{l.keterangan}</td>
+                                            <td className="p-4 text-right">
+                                                <button 
+                                                    onClick={() => handleDeleteLibur(l.tanggal)} 
+                                                    disabled={isDeleting === l.tanggal}
+                                                    className="text-red-400 hover:text-red-300 disabled:opacity-50"
+                                                >
+                                                    {isDeleting === l.tanggal ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18}/>}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </Card>
+                    </div>
+                );
+            };
+
+            const JadwalSoreView = () => {
+                const [editingDay, setEditingDay] = useState(null); 
+                const [tempPetugas, setTempPetugas] = useState([]); 
+                const [isSaving, setIsSaving] = useState(false);
+
+                const openEdit = (hari) => {
+                    setEditingDay(hari);
+                    setTempPetugas(jadwalSore[hari] || []);
+                };
+
+                const togglePetugas = (p) => {
+                    const exists = tempPetugas.some(tp => tp.niup === p.niup);
+                    if (exists) {
+                        setTempPetugas(tempPetugas.filter(tp => tp.niup !== p.niup));
+                    } else {
+                        setTempPetugas([...tempPetugas, { niup: p.niup, nama: p.nama }]);
+                    }
+                };
+
+                const saveJadwal = async () => {
+                    setIsSaving(true);
+                    const payload = { hari: editingDay, petugas: tempPetugas };
+                    try {
+                        await fetch(`${apiUrl}?action=saveJadwalSore`, {
+                            method: 'POST',
+                            body: JSON.stringify(payload)
+                        });
+                        setJadwalSore(prev => ({ ...prev, [editingDay]: tempPetugas }));
+                        setEditingDay(null);
+                    } catch(e) { alert("Gagal menyimpan jadwal"); }
+                    setIsSaving(false);
+                };
+
+                return (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="bg-gradient-to-r from-purple-900/50 to-indigo-900/50 p-6 rounded-2xl border border-white/10">
+                            <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                                <Moon className="text-indigo-300" /> Jadwal Kantor Sore
+                            </h2>
+                            <p className="text-indigo-200">Shift Khusus: 16.00 – 22.00 WIB</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {['Sabtu', 'Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis'].map((hari) => {
+                                const petugasHariIni = jadwalSore[hari] || [];
+                                return (
+                                    <Card key={hari} className="p-5 hover:border-indigo-500/50 transition-colors group relative">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-bold text-white">{hari}</h3>
+                                            <span className="text-xs font-mono text-gray-400 bg-white/5 px-2 py-1 rounded">16:00 - 22:00</span>
+                                        </div>
+                                        <div className="space-y-2 min-h-[80px]">
+                                            {petugasHariIni.length > 0 ? petugasHariIni.map((p, idx) => (
+                                                <div key={idx} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
+                                                    <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center text-xs text-indigo-200 font-bold">
+                                                        {p.nama ? p.nama.substring(0,2) : '??'}
+                                                    </div>
+                                                    <span className="text-sm text-gray-300">{p.nama}</span>
+                                                </div>
+                                            )) : (
+                                                <p className="text-xs text-gray-500 italic">Belum ada petugas.</p>
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={() => openEdit(hari)}
+                                            className="w-full mt-4 py-2 flex items-center justify-center gap-2 border border-dashed border-white/20 text-gray-400 text-xs rounded-lg hover:bg-white/5 transition-colors group-hover:border-indigo-500/30 group-hover:text-indigo-300">
+                                            <Edit3 size={14}/> Edit Petugas
+                                        </button>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+
+                        <Modal isOpen={!!editingDay} onClose={() => setEditingDay(null)} title={`Edit Jadwal: ${editingDay}`}>
+                            <div className="max-h-[300px] overflow-y-auto space-y-2 mb-4 pr-2 custom-scrollbar">
+                                {pengurus.map((p, idx) => {
+                                    const isSelected = tempPetugas.some(tp => tp.niup === p.niup);
+                                    return (
+                                        <div key={`${p.niup}-${idx}`} 
+                                            onClick={() => togglePetugas(p)}
+                                            className={`p-3 rounded-lg cursor-pointer flex items-center justify-between transition-all ${isSelected ? 'bg-indigo-600/30 border border-indigo-500' : 'bg-white/5 border border-transparent hover:bg-white/10'}`}>
+                                            <span className="text-sm text-white">{p.nama}</span>
+                                            {isSelected && <CheckCircle2 size={16} className="text-indigo-400"/>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
+                                <button onClick={() => setEditingDay(null)} className="px-4 py-2 text-sm text-gray-400 hover:text-white">Batal</button>
+                                <button onClick={saveJadwal} disabled={isSaving} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm flex items-center gap-2">
+                                    {isSaving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} Simpan
+                                </button>
+                            </div>
+                        </Modal>
+                    </div>
+                );
+            };
+
+            const SettingsView = () => (
+                <div className="space-y-6 animate-fade-in">
+                    <h2 className="text-2xl font-bold text-white">Pengaturan</h2>
+                    <Card className="p-6">
+                        <h3 className="text-lg font-bold text-white mb-4">Database</h3>
+                        <input type="text" value={apiUrl} onChange={e => setApiUrl(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white text-sm" placeholder="URL Apps Script"/>
+                        <button onClick={fetchData} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg">Test Connection</button>
+                    </Card>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-[#0f0c29] text-gray-100 font-sans selection:bg-indigo-500 selection:text-white relative">
+                    {/* Dynamic Background */}
+                    <div className="fixed inset-0 z-0">
+                        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] animate-pulse"></div>
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+                    </div>
+
+                    {/* LOADING SCREEN OVERLAY */}
+                    {isLoading && <LoadingScreen />}
+
+                    <div className="relative z-10 flex min-h-screen pb-24 lg:pb-0">
+                        {/* DESKTOP SIDEBAR */}
+                        <aside className={`hidden lg:flex fixed lg:sticky top-0 h-screen ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-black/40 backdrop-blur-xl border-r border-white/10 transition-all duration-300 z-50 flex-col`}>
+                            <div className="p-6 flex items-center gap-3 mb-8">
+                                <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+                                    <CalendarDays className="text-white" size={24} />
+                                </div>
+                                {!isSidebarCollapsed && (
+                                    <div className="overflow-hidden whitespace-nowrap animate-fade-in">
+                                        <h1 className="font-bold text-white leading-tight">ABSEN</h1>
+                                        <p className="text-xs text-indigo-300">BIKTREN</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <nav className="flex-1 px-4 space-y-2">
+                                {menuItems.map((item) => (
+                                    <button 
+                                        key={item.id}
+                                        onClick={() => setActiveTab(item.id)}
+                                        title={isSidebarCollapsed ? item.label : ''}
+                                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative
+                                            ${activeTab === item.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-400 hover:bg-white/5 hover:text-white'}
+                                            ${isSidebarCollapsed ? 'justify-center' : ''}
+                                        `}
+                                    >
+                                        <item.icon size={20} className="shrink-0" />
+                                        {!isSidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            <div className="p-4 border-t border-white/10 flex justify-end">
+                                <button 
+                                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                                    className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 rounded-lg w-full flex justify-center"
+                                >
+                                    {isSidebarCollapsed ? <ChevronRight size={20}/> : <ChevronLeft size={20}/>}
+                                </button>
+                            </div>
+                        </aside>
+
+                        {/* MOBILE BOTTOM NAV */}
+                        <nav className="fixed bottom-0 left-0 w-full bg-[#0f0c29]/90 backdrop-blur-xl border-t border-white/10 z-50 lg:hidden px-4 py-3 flex justify-between items-center gap-2">
+                            {menuItems.slice(0, 5).map((item) => { 
+                                const isActive = activeTab === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setActiveTab(item.id)}
+                                        className={`flex items-center justify-center rounded-xl transition-all duration-300 
+                                            ${isActive 
+                                                ? 'flex-grow bg-indigo-600/20 text-indigo-300 py-2 px-4 gap-2' 
+                                                : 'w-10 h-10 text-gray-400 hover:text-white'
+                                            }
+                                        `}
+                                    >
+                                        <item.icon size={20} className={`${isActive ? 'text-indigo-400 drop-shadow-[0_0_5px_rgba(129,140,248,0.5)]' : ''}`}/>
+                                        {isActive && <span className="text-xs font-bold whitespace-nowrap animate-fade-in">{item.label}</span>}
+                                    </button>
+                                )
+                            })}
+                            <button
+                                onClick={() => setIsMobileMenuOpen(true)} 
+                                className={`w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white`}
+                            >
+                                <Menu size={20}/>
+                            </button>
+                        </nav>
+
+                        {/* Mobile Full Menu Overlay */}
+                        {isMobileMenuOpen && (
+                            <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex flex-col justify-end lg:hidden animate-fade-in">
+                                <div className="bg-[#1a1a2e] rounded-t-2xl p-6 border-t border-white/10">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="text-xl font-bold text-white">Menu Lengkap</h3>
+                                        <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400"><X size={24}/></button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {menuItems.map(item => (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
+                                                className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all
+                                                    ${activeTab === item.id ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300' : 'bg-white/5 border-transparent text-gray-400'}
+                                                `}
+                                            >
+                                                <item.icon size={24} className="mb-2"/>
+                                                <span className="text-sm">{item.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MAIN CONTENT */}
+                        <main className={`flex-1 p-4 lg:p-8 overflow-x-hidden transition-all duration-300`}>
+                            {/* Header Mobile Title */}
+                            <div className="lg:hidden flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
+                                        <CalendarDays className="text-white" size={18} />
+                                    </div>
+                                    <span className="font-bold text-white text-lg">ABSEN BIKTREN</span>
+                                </div>
+                            </div>
+
+                            {activeTab === 'dashboard' && <DashboardView />}
+                            {activeTab === 'pengurus' && <DataPengurusView />}
+                            {activeTab === 'absensi' && <AbsensiView />}
+                            {activeTab === 'rekap' && <RekapView />}
+                            {activeTab === 'jadwal' && <JadwalSoreView />}
+                            {activeTab === 'libur' && <DataLiburView />}
+                            {activeTab === 'settings' && <SettingsView />}
+                        </main>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- RENDER ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
